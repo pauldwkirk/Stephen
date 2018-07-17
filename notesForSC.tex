@@ -1,0 +1,216 @@
+\documentclass[fleqn,11pt]{wlscirep}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{verbatim}
+\usepackage{listings}
+
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{tikz}
+
+\title{Bayesian mixture modelling notes}
+
+%\author{}
+\author[1,*]{Paul D. W. Kirk}
+\affil[1]{MRC Biostatistics Unit, Cambridge, UK}
+\affil[*]{paul.kirk@mrc-bsu.cam.ac.uk}
+
+%\keywords{Keyword1, Keyword2, Keyword3}
+\begin{abstract}
+%List of ideas for possible future investigation
+\end{abstract}
+\begin{document}
+\maketitle
+\vspace{-1.8cm}
+
+
+\section{Mixture modelling}
+Suppose we have data consisting of $n$ observations, $D = \{{\bf v}_i \}_{i = 1}^n$.
+
+We model the data using a mixture model with $K$ components (where $K$ could be finite or infinite), as follows:
+\begin{align}
+p({\bf v}|\boldsymbol{\rho}, \boldsymbol{\pi}) & = \sum_{k=1}^K \pi_k f_{\bf v}({\bf v}|\boldsymbol{\rho}_k),
+\end{align}
+where $\pi_k$ is the mixture weight associated with the $k$-th component, and $\boldsymbol{\rho}_k$ denotes the parameters associated with the $k$-th component.  
+
+As is common for mixture models, we introduce latent component allocation variables, $c_i$, where $c_i = k$ if the $i$-th observation ${\bf v}_i $ is associated with the $k$-th component, and $p(c_i = k| \pi) = \pi_k$.  Then, 
+\begin{align}
+p({\bf v}_i|c_i, \boldsymbol{\rho}) = f_{\bf v}({\bf v}_i | \rho_{c_i}),
+\end{align}
+and hence
+\begin{align}
+p({\bf v}_i,c_i = k| \boldsymbol{\rho}, \pi) &= f_{\bf v}({\bf v}_i | \rho_{k})p(c_i = k| \pi)\\
+&=f_{\bf v}({\bf v}_i | \rho_{k})\pi_k.
+\end{align}
+Integrating out $c_i$ by summing over all $K$ possible values, we obtain (as we would hope):
+\begin{align}
+p({\bf v}_i| \boldsymbol{\rho}, \pi) &= \sum_{k = 1}^K \pi_k f_{\bf v}({\bf v}_i | \rho_{k}).
+\end{align}
+
+Making the usual conditional independence assumptions, the full joint model for ${\bf v}_i, c_i, \rho, \pi$ is:
+\begin{align}
+p({\bf v}_i,c_i, \boldsymbol{\rho}, \pi) &= f_{\bf v}({\bf v}_i | \rho_{c_i})p(c_i | \pi)p(\pi)p(\rho)\\
+&= f_{\bf v}({\bf v}_i | \rho_{c_i})p(c_i | \pi)p(\pi)\prod_{k = 1}^K p(\rho_k),
+\end{align}
+where we assume independent priors for the component-specific parameters, $\rho_k$.
+
+For the full dataset, we have:
+\begin{align}
+p({\bf v}_1,\ldots, {\bf v}_n,c_1, \ldots, c_n, \boldsymbol{\rho}, \pi) &= \left(\prod_{i=1}^n f_{\bf v}({\bf v}_i | \rho_{c_i})p(c_i | \pi)\right)p(\pi)p(\rho)\\
+&= \left(\prod_{i=1}^n f_{\bf v}({\bf v}_i | \rho_{c_i})p(c_i | \pi)\right)p(\pi)\prod_{k = 1}^K p(\rho_k).\label{joint}
+\end{align}
+
+\subsection{Conditionals for Gibbs sampling (finite $K$ case)}
+Given Equation \eqref{joint}, it is straightforward to write down the conditionals for Gibbs sampling.  For the time being, we assume finite $K$ (from which we will later derive the infinite limit).  
+
+\subsubsection{Conditional for $\rho_k$}
+  By examination of the RHS of Equation \ref{joint}, we have:
+\begin{equation}
+p(\boldsymbol{\rho}_{k}| {\bf v}_1,\ldots, {\bf v}_n,c_1, \ldots, c_n, \boldsymbol{\rho}_{-k}, \pi) \propto p(\rho_k) \prod_{i: c_i = k} f_{\bf v}({\bf v}_i | \rho_{c_i}),\label{postparm}
+\end{equation} 
+where $\boldsymbol{\rho}_{-k}$ denotes the set comprising all $\boldsymbol{\rho}_{j}$ for which $j\ne k$.  Thus the conditional for $\rho_k$ is the posterior density for $\rho_k$ given all ${\bf v}_i$ for which $c_i = k$.  Note that if there are no ${\bf v}_i$ for which $c_i = k$ (i.e. if the $k$-th component has no observations associated with it), then $\boldsymbol{\rho}_{k}$ is simply sampled from the prior, $p(\rho_k)$.     
+
+\subsubsection{Conditional for $\pi$}
+  By examination of the RHS of Equation \ref{joint}, we have:
+\begin{align}
+p(\pi| {\bf v}_1,\ldots, {\bf v}_n,c_1, \ldots, c_n, \boldsymbol{\rho}, \pi) &\propto \left(\prod_{i=1}^n p(c_i | \pi)\right)p(\pi).\\
+\end{align}
+Hence, the conditional for $\pi$ is the posterior for $\pi$ given the values taken by the categorical latent allocation variables, $c_i$, $i = 1, \ldots, n$.  If we take a conjugate Dirichlet prior, this posterior is available in closed form.  
+
+
+
+\subsubsection{Conditional for $c_i$}
+  By examination of the RHS of Equation \ref{joint}, we have:
+\begin{align}
+p(c_i = k| {\bf v}_1,\ldots, {\bf v}_n,\boldsymbol{\rho}, \pi, c_{-i}) &\propto p(c_i=k|\pi) f_{\bf v}({\bf v}_i | \rho_{k}),\label{cicond1}\\
+&= \pi_k  f_{\bf v}({\bf v}_i | \rho_{k}),
+\end{align}
+where $c_{-i}$ denotes the set comprising all $c_{j}$ for which $j\ne i$.  Since $\sum_{k = 1}^K p(c_i = k| {\bf v}_1,\ldots, {\bf v}_n,\boldsymbol{\rho}, \pi, c_{-i}) = 1$, it follows that the conditional is:  
+\begin{align}
+p(c_i = k| {\bf v}_1,\ldots, {\bf v}_n,\boldsymbol{\rho}, \pi, c_{-i}) &= \frac{\pi_k  f_{\bf v}({\bf v}_i | \rho_{k})}{\sum_{k=1}^K \pi_k  f_{\bf v}({\bf v}_i | \rho_{k})},
+\end{align}
+which may be straightforwardly evaluated for finite $K$.
+\subsubsection{Marginalising $\pi$}
+Taking a conjugate Dirichlet prior for $\pi$, an alternative strategy is to marginalise $\pi$ rather than to sample it.  We assume a symmetirc Dirichlet prior with concentration parameter $\alpha/K$.  
+
+{\bf Note} that the $c_i$'s are only conditionally independent of one another given $\pi$, so if we marginalise $\pi$ then we must be careful to model the dependence of $c_i$ on $c_{-i}$ in our conditional for $c_i$. 
+
+We have    
+\begin{align}
+p(c_i = k| {\bf v}_1,\ldots, {\bf v}_n,\boldsymbol{\rho}, \pi, c_{-i}, \alpha) &\propto p(c_i=k|c_{-i}, \pi, \alpha) f_{\bf v}({\bf v}_i | \rho_k) \mbox{\quad\quad\quad\quad\quad [cf. Equation \eqref{cicond1}]}.%\\
+%&= f_{\bf v}({\bf v}_i | \rho_k) \frac{p(c_i=k,c_{-i}| \pi, \alpha)}{p(c_{-i}| \pi, \alpha)}, %\int_\pi p(c_i=k|c_{-i}, \pi, \alpha) p(\pi|\alpha)
+\end{align}
+To marginalise $\pi$, we must therefore evaluate $\int_\pi p(c_i=k|c_{-i}, \pi, \alpha) p(\pi|\alpha)d\pi = p(c_i=k|c_{-i}, \alpha)$, which is the conditional prior for $c_i$ given the values for the other latent allocation variables, $c_{-i}$.  
+
+We have,
+\begin{align}
+p(c_i=k|c_{-i}, \alpha) &= \int_\pi p(c_i=k|c_{-i}, \pi, \alpha) p(\pi|\alpha)d\pi\\
+&= \int_\pi \frac{p(c_i=k,c_{-i}| \pi, \alpha)}{p(c_{-i}| \pi, \alpha)} p(\pi|\alpha) d\pi\\
+&= \frac{\int_\pi p(c_i=k,c_{-i}| \pi)p(\pi|\alpha)d\pi}{ \int_\pi p(c_{-i}| \pi)p(\pi|\alpha)d\pi}, \label{cicond2}  
+\end{align}
+where in the final line we exploit the fact that the $c_i$'s are conditionally independent of $\alpha$, given $\pi$.
+
+In order to proceed, we must evaluate this fraction.  To do this we require a standard result about Dirichlet distributions, which says that moments of random variables distributed according to a symmetric Dirichlet distribution with concentration parameter $\alpha/K$ can be expressed as follows:
+\begin{equation}
+E\left[\prod_{k = 1}^K \pi_k^{m_k} \right] = \frac{\Gamma(\sum_{k=1}^K (\alpha/K))}{\Gamma(\sum_{k=1}^K ((\alpha/K) + m_k))}\times \prod_{k=1}^K \frac{\Gamma ((\alpha/K) + m_k)}{\Gamma(\alpha/K)},\label{standard}
+\end{equation}
+where the $m_k$'s are any natural numbers. 
+
+Moreover, we note the following two equalities: 
+$$p(c_i = k, c_{-i}| \pi) = \pi_k^{n_{-i,k} + 1}\prod_{\substack{c= 1,\ldots,K\\
+                  c \ne k}} \pi_c^{n_{-i,c}}, $$
+                  and
+$$p(c_{-i}| \pi) = \pi_k^{n_{-i,k}}\prod_{\substack{c= 1,\ldots,K\\
+                  c \ne k}} \pi_c^{n_{-i,c}}, $$
+where $n_{-i,c}$ is the number of $c_j$'s with $j \ne i$ for which $c_j = c$.  It then follows that we may use the result given in Equation \eqref{standard} in order to evaluate the numerator and denominator in the RHS of Equation \eqref{cicond2}.  After some algebra, and exploiting the property of Gamma functions that $\Gamma(t+1) = t\Gamma(t)$, we obtain:
+\begin{align}
+p(c_i=k|c_{-i}, \alpha) &= \frac{n_{-i,k} + \alpha/K}{n - 1 + \alpha}. \label{cicond3}  
+\end{align}
+Hence,
+\begin{align}
+p(c_i = k| {\bf v}_1,\ldots, {\bf v}_n,\boldsymbol{\rho}, c_{-i}, \alpha) &\propto  \frac{n_{-i,k} + \alpha/K}{n - 1 + \alpha} \times f_{\bf v}({\bf v}_i | \rho_k).
+\end{align}
+Moreover, since $K$ is finite, we may straightforwardly evaluate the equality:
+\begin{align}
+p(c_i = k| {\bf v}_1,\ldots, {\bf v}_n,\boldsymbol{\rho}, c_{-i}, \alpha) &= \frac{1}{Z} \frac{n_{-i,k} + \alpha/K}{n - 1 + \alpha} \times f_{\bf v}({\bf v}_i | \rho_k),\label{finite_nomarg}
+\end{align} 
+where
+\begin{equation}
+Z = \sum_{c =1}^K \left(\frac{n_{-i,c} + \alpha/K}{n - 1 + \alpha} \times f_{\bf v}({\bf v}_i | \rho_c)\right).  
+\end{equation}
+
+\subsubsection{Marginalising $\rho$}
+Similarly, if a conjugate prior is available for the $\rho_k$'s, then these may be marginalised too.  {\bf Note} that (similar to the case with the $c_i$'s when we marginalised $\pi$) the ${\bf v}_i$'s are only conditionally independent of one another given the $\rho_k$'s and the $c_i$'s, so if we marginalise $\rho$ then we must be careful to model the dependence of ${\bf v}_i$ on ${\bf v}_{-i}$ in our conditional for $c_i$.  
+
+After some algebra, it is straightforward to show that marginalising $\rho$ gives the following for the conditional for~$c_i$:
+\begin{align}
+p(c_i = k| {\bf v}_1,\ldots, {\bf v}_n,c_{-i}, \alpha) &= \frac{1}{Z} \frac{n_{-i,k} + \alpha/K}{n - 1 + \alpha} \times \int_{\rho_k}f_{\bf v}({\bf v}_i | \rho_k) p(\rho_k|{\bf v}_{-i,k}) d\rho_k,\label{condci4}
+\end{align} 
+where ${\bf v}_{-i,k}$ denotes all observations ${\bf v}_j$ for which $j \ne i$ and $c_j = k$, and hence $p(\rho_k|{\bf v}_{-i,k})$ is the posterior for $\rho_k$ given all of the observations currently associated with component $k$ (excluding ${\bf v}_i$).  If there are no ${\bf v}_j$ for which $j \ne i$ and $c_j = k$ (i.e. if $k$ is a component to which no other observations have been allocated), then we say that the $k$-th component is {\em empty} and define $p(\rho_k|{\bf v}_{-i,k}):= p(\rho_k)$ to be the prior for $\rho_k$.  
+
+When implementing the sampler, it is useful to observe that $$p(\rho_k|{\bf v}_{-i,k}) = \frac{f_{\bf v}({\bf v}_{-i,k}|\rho_k) p(\rho_k)}{\int_{\rho_k}f_{\bf v}({\bf v}_{-i,k}|\rho_k) p(\rho_k)d\rho_k}, \mbox{ if the $k$-th component is not empty.}$$  
+Hence, still assuming that the $k$-th component is not empty, the integral in Equation \eqref{condci4} is
+\begin{equation}
+\int_{\rho_k}f_{\bf v}({\bf v}_i | \rho_c) p(\rho_k|{\bf v}_{-i,k}) d\rho_k = 
+\frac{\int_{\rho_k}f_{\bf v}({\bf v}_i,{\bf v}_{-i,k}|\rho_k) p(\rho_k)d\rho_k}{\int_{\rho_k}f_{\bf v}({\bf v}_{-i,k}|\rho_k) p(\rho_k)d\rho_k},\label{marg}
+\end{equation}
+which is a ratio of marginal likelihoods: one in which we include ${\bf v}_i$ amongst the observations associated with component $k$, and one in which we exclude ${\bf v}_i$ from the observations associated with component $k$.  
+
+This expression aids the interpretation of the sampler: at each iteration, and for each component, we weigh the evidence that ${\bf v}_i$ is associated with component $k$ against the evidence that ${\bf v}_i$ is {\em not} associated with component $k$ (given the other observations currently associated with that component, ${\bf v}_{-i,k}$).  Intuitively, this expression ensures that we are more likely to allocate ${\bf v}_i$ to a component to which similar observations have previously been allocated.
+
+Note also that the term $\frac{n_{-i,k} + \alpha/K}{n - 1 + \alpha} $ in Equation \eqref{condci4} represents the conditional prior probability that ${\bf v}_i$ should be allocated to component $k$ represents our prior belief that we should allocate ${\bf v}_i$ to component $k$, given the allocation of all of the other observations.  Since $n_{-i,k}$ is in the numerator, this expresses a ``rich-get-richer" prior belief; i.e. that, {\em a priori}, we are more likely to assign ${\bf v}_i$ to a component that already has many observations assigned to it, rather than to one with fewer.    
+
+\subsubsection{Final note}
+Note that, having marginalised the $\pi_k$'s and $\rho_k$'s, we may use Equation \eqref{condci4} to sample just the $c_i$'s, without having to sample any other parameters.  The one exception is the $\alpha$ hyperparameter, which we may either fix or sample (using, for example, the approach described in Escobar and West, 1995).  
+
+
+\section{Modelling categorical data}
+We now consider the specific case in which we have categorical covariates.  
+
+\subsection{Modelling the covariates}
+We assume that each covariate (i.e. each element of the vector ${\bf v}_i$) is categorical, with the $j$-th covariate having $R_j$ categories, which we label as $1, 2, \ldots, R_j$.  We model the data using categorical distributions.  We define $\phi_{k,j,r}$ to be the probability that the $j$-th covariate takes value $r$ in the $k$-th component, and write $\Phi_{k,j} = [\phi_{k,j,1}, \phi_{k,j,2}, \ldots, \phi_{k,j,R_j} ]$ for the collection of probabilities associated with the $j$-th covariate in the $k$-th component.  We further define $\Phi_{k} = \{\Phi_{k,1}, \Phi_{k,2}, \ldots, \Phi_{k,J}\}$ to be the collection of all probabilities (over all $J$ covariates) associated with the $k$-th component, and $\Phi = \{ \Phi_{k} \}_{k\in \mathcal{C}}$ to be the set of all $\Phi_{k}$'s that are associated with non-empty components (here, $\mathcal{C} = \{k: c_i = k \mbox{ for some } i \in \{1,\ldots,n\}\}$).  
+
+We assume that the covariates are conditionally independent, given their component allocation, so that 
+\begin{align}      
+ f_{\bf v}({\bf v}_i = [v_{i1}, v_{i2}, \ldots, v_{iJ}]|\boldsymbol{\Phi}, c_i = k) &= \phi_{k,j,v_{i1}} \phi_{k,j,v_{i2}} \ldots \phi_{k,j,v_{iJ}}\\
+ &= \prod_{j = 1}^J  \phi_{k,j,v_j}\label{likeliprod}
+\end{align}
+
+\subsubsection{Conditional for $\Phi_{k,j}$}
+From Equation \eqref{postparm}, the conditional that we require for Gibbs sampling is the posterior for $\Phi_{k,j}$, given the observations associated with the $k$-th component.  For each $j$, we adopt a conjugate Dirichlet prior for $\Phi_{k,j}$, $$\Phi_{k,j} \sim \mbox{Dirichlet}({\bf a}_j),$$ where ${\bf a}_j = [a_{j,1}, \ldots, a_{j,R_j}]$ is the vector of concentration parameters.
+The posterior is then:
+\begin{align}
+\Phi_{k,j}|{ v}_{i_1,j}, { v}_{i_2,j}, \ldots, { v}_{i_{n_k},j}, {\bf a}_j \sim \mbox{Dirichlet}({\bf a}_j + [s_{k,j,1}, s_{k,j,2}, \ldots, s_{k,j,R_j}]),
+\end{align}
+where ${\bf v}_{i_1}, {\bf v}_{i_2}, \ldots, {\bf v}_{i_{n_k}}$ are the observations associated with component $k$, and $s_{k,j,r}$ is defined to be the number of observations associated with component $k$ for which the $j$-th covariate is in category $r$.  
+
+\subsubsection{Marginalising $\Phi_{k,j}$}\label{marginphi}
+We may also integrate out $\Phi_{k,j}$ in order to write down the marginal likelihood associated with ${ v}_{i_1,j}, { v}_{i_2,j}, \ldots, { v}_{i_{n_k},j}$.  Note that the marginal likelihood is (by definition) the prior expectation of the product $\phi_{k,j,1}^{s_{k,j,1}}\ldots\phi_{k,j,{R_j}}^{s_{k,j,{R_j}}}$.  We may therefore use the same standard result that was used to derive Equation \eqref{standard} in order to immediately write down the marginal likelihood.  Still assuming that ${\bf v}_{i_1}, {\bf v}_{i_2}, \ldots, {\bf v}_{i_{n_k}}$ are the observations associated  with component $k$, we have:
+\begin{equation}
+p({ v}_{i_1,j}, { v}_{i_2,j}, \ldots, { v}_{i_{n_k},j}| {\bf a}_j) = \frac{\Gamma(\sum_{r=1}^{R_j}a_{j,r} )}{\Gamma(\sum_{r=1}^{R_j}(a_{j,r}+ s_{k,j,r}) )}\times \prod_{r = 1}^{R_j} \frac{\Gamma(a_{j,r} + s_{k,j,r})}{\Gamma(a_{j,r})}.\label{catmarg}
+\end{equation}
+To shorten notation, define $V_{k} = \{ {\bf v}_{i_1}, {\bf v}_{i_2}, \ldots, {\bf v}_{i_{n_k}} \}$ to be the set of observations associated with component $k$, and $V_{k, j} = \{ { v}_{i_1,j}, { v}_{i_2,j}, \ldots, { v}_{i_{n_k},j} \}$ to be the set containing the $j$-th elements of the vectors in $V_{k}$.  Since we assume that the covariates are conditionally independent, given their component allocation, it follows that:
+    
+\begin{equation}
+p(V_{k}| {\bf a}_1, \ldots, {\bf a}_J) = \prod_{j = 1}^J p(V_{k,j}|{\bf a}_j),\label{marglikelix}
+\end{equation}
+where $p(V_{k,j}|{\bf a}_j) = p({ v}_{i_1,j}, { v}_{i_2,j}, \ldots, { v}_{i_{n_k},j}| {\bf a}_j)$ is as given in Equation \eqref{catmarg}.
+
+
+\subsection{Joint marginal likelihood}
+In order to proceed, we need an expression for the marginal likelihood associated with $V_k$.
+\begin{equation}
+p(V_{k}| {\bf a}_1, \ldots, {\bf a}_J, {\bf a}_y) = \prod_{j = 1}^J p(V_{k,j}|{\bf a}_j),
+\end{equation}
+where the expression for $p(V_{k,j}|{\bf a}_j) = p({ v}_{i_1,j}, { v}_{i_2,j}, \ldots, { v}_{i_{n_k},j}| {\bf a}_j)$ is as given in Equation \eqref{catmarg}.  Note that:
+\begin{enumerate}
+  \item Setting $V_k = \{{\bf v}_i, {\bf v}_{-i,k}\}$, we can evaluate the marginal likelihood in the numerator in Equation \eqref{infcond1}.
+  \item Setting $V_k = \{{\bf v}_{-i,k}\}$, we can evaluate the marginal likelihood in the denominator in Equation \eqref{infcond1}.
+  \item Setting $V_k = \{{\bf v}_i\}$, we can evaluate the marginal likelihood in Equation \eqref{infcond2}.  
+  \end{enumerate}
+
+Thus, we may evaluate all of the terms required for the conditionals for $c_i$, and hence (leaving aside, for the time being, the problem of sampling $\alpha$) we have everything we need in order to perform inference for our model.  
+
+
+\end{document}
+
