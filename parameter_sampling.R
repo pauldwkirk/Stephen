@@ -292,3 +292,5 @@ class_labels - class_labels_0
 
 plot_data <- data.frame(X = data, Index = 1:N, Class = class_labels)
 ggplot(plot_data, aes(x = X, y = Index, colour = Class)) + geom_point() 
+
+# Test
