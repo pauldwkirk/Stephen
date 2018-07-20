@@ -46,7 +46,10 @@ gibbs_sampler <- function(fm, num_iter = 5) {
       curr_entry <- data[j] # univariate
       curr_class <- class_labels[j]
       
-      
+      if(j == 1)
+      {
+        print("debug")
+      }
       # Update the data to reflect removing the current point
       q[[curr_class]] <- del_item(q[[curr_class]], curr_entry) 
       class_table[curr_class] <- class_table[curr_class] - 1
@@ -62,7 +65,7 @@ gibbs_sampler <- function(fm, num_iter = 5) {
       
       print(glue("Curr entry value: {value}", value = curr_entry))
       
-      
+
       # q[k] is a Gaussian, q is a mixture of gaussians
       for (l in 1:k) {
         print(glue("Curr variance value: {value}", value = q[[l]]$C))
@@ -79,11 +82,23 @@ gibbs_sampler <- function(fm, num_iter = 5) {
       
       # Assign to class based on cumulative probabilities
       pred <- 1 + sum(u > cumsum(prob)) #
+  
+      print(table(class_labels))
+      print("Numbers in each class:")
+      print(q[[1]]$n)
+      print(q[[2]]$n)
       
+          
       # add the current entry back into model (component q[k])
       class_labels[j] <- pred
       class_table[pred] <- class_table[pred] + 1
-      q[[k]] <- add_item(q[[k]], data[j])
+      q[[pred]] <- add_item(q[[pred]], data[j])
+      
+      print(table(class_labels))
+      print("Numbers in each class:")
+      print(q[[1]]$n)
+      print(q[[2]]$n)
+
       
       print(class_table)
       
@@ -167,6 +182,8 @@ rand <- function(q) {
 log_predictive <- function(q, new_point) {
   # Compares the evidence of the distribution q with the new_point included and
   # excluded
+  if(q$n != 0)
+  {
   lp <- (
     evidence(
       q$d,
@@ -185,6 +202,20 @@ log_predictive <- function(q, new_point) {
       q$X
     )
   )
+  }
+  else
+  {
+    lp <- (
+      evidence(
+        q$d,
+        q$n + 1,
+        q$precision + 1,
+        q$df + 1,
+        ramcmc::chol_update(q$C, new_point),
+        q$X + new_point
+      )
+    )
+  }
 }
 
 evidence <- function(d, n, precision, df, C, X) {
