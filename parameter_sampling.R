@@ -39,7 +39,7 @@ mean_posterior <- function(mu_0, variance, lambda_0, data) {
 
   variance_n <- variance / lambda_n
   # std_dev <- expm::sqrtm(variance_n) # wrong
-  
+
   # Take a single sample from the posterior
   mu <- mvrnorm(n = 1, mu_n, variance_n)
   # mu <- rnorm(1, mu_n, std_dev)
@@ -59,11 +59,13 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
   if (inherits(data, "data.frame")) {
     sample_size <- nrow(data)
     sample_mean <- data_frame_mean(data)
+    num_cols <- ncol(data)
   } else {
     sample_size <- length(data)
     sample_mean <- mean(data)
+    num_cols <- 1
   }
-  
+
   # data <- cluster_data
 
   # Convert data to matrix form for matrix multiplication in later steps
@@ -72,16 +74,28 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
   # Calculate the component parts of the new parameters
   # Pretty sure this is wrong
   # sample_covariance <- sum(
-  sample_covariance <- 0
-  for(i in 1:sample_size){
-    sample_covariance <- (sample_covariance 
-                          + (data[i, ] - sample_mean) %*% t(data[i, ] - sample_mean)
-    )
-  }
   
+  # Does this need to be set as a p-vec?
+  # sample_covariance <- 0
+  
+  sample_covariance <- matrix(0,nrow=num_cols,ncol=num_cols)
+  
+  if(sample_size > 0){
+    for (index in 1:sample_size) {
+      sample_covariance <- (sample_covariance
+      + ((data[index, ] - sample_mean)
+        %*% t(data[index, ] - sample_mean)
+        )
+      )
+      # print(glue("Sample covariance: \n{x}\n", x = sample_covariance))
+    }
+  }
+
   #   (data - sample_mean)
   #   %*% t(data - sample_mean)
   # )
+
+  
   
   # print(glue("Sample covariance pre-sum:\n{x}\n", x = (data - sample_mean) %*% t(data - sample_mean)))
   # print((data - sample_mean) %*% t(data - sample_mean))
@@ -89,7 +103,7 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
   # print(rowSums((data - sample_mean) %*% t(data - sample_mean)))
   # print("")
   # print("")
-  
+
 
   # The effective values of the lambda, df and scale given the data
   lambda_n <- lambda_0 + sample_size
@@ -99,23 +113,23 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
   scale_n <- (scale_0
   + sample_covariance
     + ((lambda_0 * sample_size) / (lambda_n))
-      * (sample_mean - mu_0) %*% t(sample_mean - mu_0)
+    * (sample_mean - mu_0) %*% t(sample_mean - mu_0)
   )
-  
+
   # print(glue("Sample covariance: \n{x}\n", x = sample_covariance))
   # print(glue("Scale: \n{x}\n\n", x = scale_n))
 
   # awk_part <- ((lambda_0 * sample_size) / (lambda_n)) * (sample_mean - mu_0) %*% t(sample_mean - mu_0)
-  # 
+  #
   # first_part <- ((lambda_0 * sample_size) / (lambda_n))
   # sec_part <- (sample_mean - mu_0) %*% t(sample_mean - mu_0)
-  
+
   # print(glue("Components of scale_n\nTotal: {total}\nFirst comp: {first}\nSecond comp: {second}\n\n",
   #            total = awk_part,
   #            first = first_part,
   #            second = sec_part)
   #       )
-  
+
   # Draw the variance as a single sample from a Wishart distribution
   variance <- rWishart(1, df_n, scale_n)
 
@@ -147,7 +161,7 @@ class_weight_posterior <- function(concentration_0, class_labels, k) {
   # class_weight <- rep(0, k)
 
   class_weight <- rep(0, k)
-  
+
   # Need count of members of each class to update concentration parameter
   for (i in 1:k) {
     # class_count[i] <- sum(class_labels == i)
@@ -207,10 +221,10 @@ sample_class <- function(point, data, k, class_weights,
 
     if (!is.null(mu)) {
       # Exponent in likelihood function
-      exponent <- -1 / 2 * (t(as.matrix(point - mu[[i]])) 
-                            %*% solve(variance[[i]]) 
-                            %*% (as.matrix(point - mu[[i]]))
-                            )
+      exponent <- -1 / 2 * (t(as.matrix(point - mu[[i]]))
+      %*% solve(variance[[i]])
+        %*% (as.matrix(point - mu[[i]]))
+      )
 
       # Weighted log-likelihood for this class
       prob[i] <- curr_weight + log((det(variance[[i]])^(-0.5))) + exponent
@@ -230,14 +244,13 @@ sample_class <- function(point, data, k, class_weights,
 
   # Assign to class based on cumulative probabilities
   pred <- 1 + sum(u > cumsum(prob))
-
 }
 
 # === Demo =====================================================================
 
-N <- 10
+N <- 20
 k <- 2
-data <- c(rnorm(N / 2, -40, 1), rnorm(N / 2, 4, 1))
+data <- c(rnorm(N / 2, -50, 1), rnorm(N / 2, 50, 1))
 mu_0 <- 0
 df_0 <- 1
 scale_0 <- matrix(1)
@@ -248,49 +261,49 @@ concentration_0 <- rep(0.1, k)
 variance <- list()
 mu <- list()
 class_labels <- sample(c(1, 2), N, replace = T)
-
+# class_labels <- c(1, 1, 1, 2, 1, 2, 2, 2, 1, 1)
 class_labels_0 <- class_labels
 
-num_iter <- 5
+num_iter <- 1000
 
 
 for (qwe in 1:num_iter) {
-  
+
   # print("Initial class labels:")
   # print(class_labels)
   # print(glue("\n\nIteration: {iter}", iter = qwe))
-  
+
   class_weights <- class_weight_posterior(concentration_0, class_labels, k)
-  
-  # print(glue("Class weights: \n{x}, {y}\n", 
+
+  # print(glue("Class weights: \n{x}, {y}\n",
   #            x = signif(class_weights[1], 3),
   #            y = signif(class_weights[2], 3)
   #            )
   #       )
-  
+
   for (j in 1:k) {
     cluster_data <- data[class_labels == j]
-    
+
     variance[[j]] <- variance_posterior(df_0, scale_0, lambda_0, mu_0, cluster_data)
     mu[[j]] <- mean_posterior(mu_0, variance[[j]], lambda_0, cluster_data)
   }
-  
-  # print(glue("Class std: \n{x} \n{y}\n", 
+
+  # print(glue("Class std: \n{x} \n{y}\n",
   #            x = signif(sqrt(variance[[1]][1, 1]), 3),
   #            y = signif(sqrt(variance[[2]][1, 1]), 3)
   #            )
   #       )
-  
+
   # print(glue("Class means: \n{x}\n{y}\n\n", x = mu[1], y = mu[2]))
-  
+
   for (i in 1:N) {
     # print(glue("Individual: {x}", x = i))
     point <- data[i]
     # print(glue("Value: {x}", x = point))
     class_labels[i] <- sample_class(point, data, k, class_weights,
-                                    mu = mu, 
-                                    variance = variance
-                                    )
+      mu = mu,
+      variance = variance
+    )
   }
   # class_labels
   # class_labels - class_labels_0
