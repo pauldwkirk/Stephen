@@ -11,11 +11,14 @@
 
 # ------------------------------------------------------------------------------
 
+# === Libraries ================================================================
+
 library(ramcmc) # install.packages("ramcmc", dep = T)
+library(glue) # install.packages("glue", ep = T)
 
 # === Functions ================================================================
 
-gibbs_sampler <- function(fm, num_iter = 1000) {
+gibbs_sampler <- function(fm, num_iter = 5) {
   
   # Number of samples (add_count creates a row "n", hence "N")
   # N <- nrow(data)
@@ -43,6 +46,7 @@ gibbs_sampler <- function(fm, num_iter = 1000) {
       curr_entry <- data[j] # univariate
       curr_class <- class_labels[j]
       
+      
       # Update the data to reflect removing the current point
       q[[curr_class]] <- del_item(q[[curr_class]], curr_entry) 
       class_table[curr_class] <- class_table[curr_class] - 1
@@ -56,10 +60,16 @@ gibbs_sampler <- function(fm, num_iter = 1000) {
         print(prob)
       }
       
+      print(glue("Curr entry value: {value}", value = curr_entry))
+      
+      
       # q[k] is a Gaussian, q is a mixture of gaussians
       for (l in 1:k) {
-        prob[l] <- prob[l] + logpredictive(q[[l]], curr_entry)
+        print(glue("Curr variance value: {value}", value = q[[l]]$C))
+        prob[l] <- prob[l] + log_predictive(q[[l]], curr_entry)
       }
+      
+      print("hi")
       
       prob <- exp(prob - max(prob))
       prob <- prob / sum(prob)
@@ -74,6 +84,8 @@ gibbs_sampler <- function(fm, num_iter = 1000) {
       class_labels[j] <- pred
       class_table[pred] <- class_table[pred] + 1
       q[[k]] <- add_item(q[[k]], data[j])
+      
+      print(class_table)
       
     }
   }
@@ -135,34 +147,24 @@ Gaussian <- function(d, var_coef, df, mean_prior, cluster_cov) {
 
 rand <- function(q) {
   # I'm not sure this is ever used
-  C <- chol_update(q$C, q$X, sign = "-") # chol(q$C - (q$X/q$precision) * t(q$X/q$precision))
+  C <- ramcmc::chol_downdate(q$C, q$X) # chol(q$C - (q$X/q$precision) * t(q$X/q$precision))
   C <- mldivide(C, diag(q$d), pinv = TRUE) # left division of matrix C by diag(dd)
 }
 
-chol_update <- function(C, X, sign = "+") {
-  # Update a cholesky factorisation for C using X
-  if (!(sign %in% c("+", "-"))) stop("sign must be one of '+' or '-' ")
-  Y <- as.matrix(X)
-  if (sign == "+") {
-    #new_C <- chol(C + (Y %*% t(Y)))
-    new_C  <- ramcmc::chol_update(C, X)
-  } else {
-    #new_C <- chol(C - (Y %*% t(Y)))
-    new_C  <- ramcmc::chol_downdate(C, X)
-  }
-}
+# chol_update <- function(C, X, sign = "+") {
+#   # Update a cholesky factorisation for C using X
+#   if (!(sign %in% c("+", "-"))) stop("sign must be one of '+' or '-' ")
+#   Y <- as.matrix(X)
+#   if (sign == "+") {
+#     #new_C <- chol(C + (Y %*% t(Y)))
+#     new_C  <- ramcmc::chol_update(C, X)
+#   } else {
+#     #new_C <- chol(C - (Y %*% t(Y)))
+#     new_C  <- ramcmc::chol_downdate(C, X)
+#   }
+# }
 
-evidence <- function(d, n, precision, df, C, X) {
-  # Computes the normalising constant for given inputs
-  marginal_likelihood <- (
-    -n * d / 2 * log(pi)
-    - d / 2 * log(precision)
-    - df * sum(log(diag(chol_update(C, X / sqrt(precision), sign = "-")))) # not sure about this line
-    + sum(lgamma((df - (0:(d - 1)) )/ 2))
-  )
-}
-
-logpredictive <- function(q, new_point) {
+log_predictive <- function(q, new_point) {
   # Compares the evidence of the distribution q with the new_point included and
   # excluded
   lp <- (
@@ -171,7 +173,7 @@ logpredictive <- function(q, new_point) {
       q$n + 1,
       q$precision + 1,
       q$df + 1,
-      chol_update(q$C, new_point),
+      ramcmc::chol_update(q$C, new_point),
       q$X + new_point
     )
     - evidence(
@@ -184,13 +186,25 @@ logpredictive <- function(q, new_point) {
     )
   )
 }
+
+evidence <- function(d, n, precision, df, C, X) {
+  # Computes the normalising constant for given inputs
+  marginal_likelihood <- (
+    -n * d / 2 * log(pi)
+    - d / 2 * log(precision)
+    - df * sum(log(diag(ramcmc::chol_downdate(C, X / sqrt(precision))))) # not sure about this line
+    + sum(lgamma((df - (0:(d - 1)) )/ 2))
+  )
+}
+
+
 add_item <- function(q, x) {
   # Add data point x to distribution q and update contained information
   # accordingly
   q$n <- q$n + 1
   q$precision <- q$precision + 1
   q$df <- q$df + 1
-  q$C <- chol_update(q$C, x)
+  q$C <- ramcmc::chol_update(q$C, x)
   q$X <- q$X + x
   return(q)
 }
@@ -199,7 +213,7 @@ del_item <- function(q, x){
   q$n <- q$n - 1
   q$precision <- q$precision - 1
   q$df <- q$df - 1
-  q$C <- chol_update(q$C, x, sign = "-")
+  q$C <- ramcmc::chol_downdate(q$C, x)
   q$X <- q$X - x
   return(q)
 }
@@ -242,6 +256,9 @@ fm0 <- fm_init(2, aa, q0, xx, zz)
 
 
 # This is what we want to run:
+
+# --- Gibbs --------------------------------------------------------------------
+
 fm <- gibbs_sampler(fm0, num_iter = 5)
 
 # Expect problems
@@ -276,7 +293,7 @@ curr_entry <- data[j] # univariate
 curr_class <- class_labels[j]
 
 # Update the data to reflect removing the current point
-data <- data[-j]
+q[[curr_class]] <- del_item(q[[curr_class]], curr_entry)
 class_table[curr_class] <- class_table[curr_class] - 1
 
 # Calculate the probabilities for belonging to each class
@@ -288,7 +305,7 @@ prob <- log(class_table + alpha / k)
 
 # --- Breakpoint ---------------------------------------------------------------
 for (l in 1:k) {
-  prob[l] <- prob[l] + logpredictive(q[[l]], curr_entry)
+  prob[l] <- prob[l] + log_predictive(q[[l]], curr_entry)
 }
 
 prob <- exp(prob - max(prob))
@@ -304,58 +321,10 @@ u <- runif(1)
 pred <- 1 + sum(u > cumsum(prob)) #
 
 # add the current entry back into model (component q[k])
-class_labels <- c(
-  class_labels[1:j - 1],
-  pred,
-  class_labels[j:length(class_labels)]
-)
+class_labels[j] <- pred
 
 class_table[pred] <- class_table[pred] + 1
 q[[k]] <- add_item(q[[k]], data[j])
 
 
-# --- Logpredictive break ------------------------------------------------------
-
-# Closer inspection of logpredictive
-q <- fm0$q
-l <- 1
-
-# sometimes this works - I think it depends on data generated
-logpredictive(q[[l]], curr_entry)
-
-q[[l]]$C
-q4 <- chol_update(q[[l]]$C, curr_entry)
-
-# issue is normally in this calculation
-x1 <- evidence(
-  q[[l]]$d,
-  q[[l]]$n + 1,
-  q[[l]]$precision + 1,
-  q[[l]]$df + 1,
-  chol_update(q[[l]]$C, curr_entry),
-  q[[l]]$X + curr_entry
-)
-
-# specifically we cannot guarantee that q$C > XtX
-# for the update in Cholesky factorisation
-# We require this for positive definite, as
-# q$C <- q$C - q$X %*% t(q$X)
-
-# break calculation of x1 into component parts
-new_C <- chol_update(q[[l]]$C, curr_entry)
-new_X <- q[[l]]$X + curr_entry
-
-# This is normally the problem point I think
-probmat <- chol_update(new_C, new_X / (sqrt(q[[l]]$precision) + 1), sign = "-")
-
-# Sometimes it is this though; as for x1 but excluding new point
-retro <- chol_update(q[[l]]$C, q[[l]]$X / sqrt(q[[l]]$precision), sign = "-")
-
-x2 <- evidence(
-  q[[l]]$d,
-  q[[l]]$n,
-  q[[l]]$precision,
-  q[[l]]$df,
-  q[[l]]$C,
-  q[[l]]$X
-)
+q
