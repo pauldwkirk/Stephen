@@ -11,6 +11,8 @@
 
 # ------------------------------------------------------------------------------
 
+library(ramcmc) # install.packages("ramcmc", dep = T)
+
 # === Functions ================================================================
 
 gibbs_sampler <- function(fm, num_iter = 1000) {
@@ -26,12 +28,6 @@ gibbs_sampler <- function(fm, num_iter = 1000) {
   class_labels <- fm$class_label
   class_table  <- fm$class_pop
   
-  # class_table <- rep(0, k)
-  # for (i in 1:k) {
-  #   class_table[i] <- length(class_labels[class_labels == i])
-  # }
-  # i <- 1
-  # j <- 1
   for (i in 1:num_iter) {
     # the number of desired iterations in our Gibbs sampler
     print(paste("Iteration number:", i))
@@ -48,16 +44,18 @@ gibbs_sampler <- function(fm, num_iter = 1000) {
       curr_class <- class_labels[j]
       
       # Update the data to reflect removing the current point
-      #data                    <- data[-j]
+      q[[curr_class]] <- del_item(q[[curr_class]], curr_entry) 
       class_table[curr_class] <- class_table[curr_class] - 1
       
       # Calculate the probabilities for belonging to each class
       # Log, exp to handle awkward numbers
       prob <- log(class_table + alpha / k)
+      
       if(any(is.nan(prob))){
         print("Calculated probs: ")
         print(prob)
       }
+      
       # q[k] is a Gaussian, q is a mixture of gaussians
       for (l in 1:k) {
         prob[l] <- prob[l] + logpredictive(q[[l]], curr_entry)
@@ -73,14 +71,10 @@ gibbs_sampler <- function(fm, num_iter = 1000) {
       pred <- 1 + sum(u > cumsum(prob)) #
       
       # add the current entry back into model (component q[k])
-      class_labels <- c(
-        class_labels[1:j - 1],
-        pred,
-        class_labels[j:length(class_labels)]
-      )
-      
+      class_labels[j] <- pred
       class_table[pred] <- class_table[pred] + 1
       q[[k]] <- add_item(q[[k]], data[j])
+      
     }
   }
   
@@ -198,6 +192,15 @@ add_item <- function(q, x) {
   q$df <- q$df + 1
   q$C <- chol_update(q$C, x)
   q$X <- q$X + x
+  return(q)
+}
+
+del_item <- function(q, x){
+  q$n <- q$n - 1
+  q$precision <- q$precision - 1
+  q$df <- q$df - 1
+  q$C <- chol_update(q$C, x, sign = "-")
+  q$X <- q$X - x
   return(q)
 }
 
