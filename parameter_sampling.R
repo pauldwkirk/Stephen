@@ -63,13 +63,22 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
     sample_size <- length(data)
     sample_mean <- mean(data)
   }
+  
+  # data <- cluster_data
 
   # Convert data to matrix form for matrix multiplication in later steps
   data <- as.matrix(data)
 
   # Calculate the component parts of the new parameters
   # Pretty sure this is wrong
-  sample_covariance <- var(data) #sum(
+  # sample_covariance <- sum(
+  sample_covariance <- 0
+  for(i in 1:sample_size){
+    sample_covariance <- (sample_covariance 
+                          + (data[i, ] - sample_mean) %*% t(data[i, ] - sample_mean)
+    )
+  }
+  
   #   (data - sample_mean)
   #   %*% t(data - sample_mean)
   # )
@@ -228,7 +237,7 @@ sample_class <- function(point, data, k, class_weights,
 
 N <- 10
 k <- 2
-data <- c(rnorm(N / 2, -4, 1), rnorm(N / 2, 4, 1))
+data <- c(rnorm(N / 2, -40, 1), rnorm(N / 2, 4, 1))
 mu_0 <- 0
 df_0 <- 1
 scale_0 <- matrix(1)
@@ -291,6 +300,4 @@ class_labels
 class_labels - class_labels_0
 
 plot_data <- data.frame(X = data, Index = 1:N, Class = class_labels)
-ggplot(plot_data, aes(x = X, y = Index, colour = Class)) + geom_point() 
-
-# Test
+ggplot(plot_data, aes(x = X, y = Index, colour = Class)) + geom_point()
