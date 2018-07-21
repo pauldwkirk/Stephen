@@ -3,8 +3,8 @@
 # === Libraries ================================================================
 
 library(expm) # install.packages("expm", dep = T)
-library(glue) # install.packages("glue", ep = T)
-library(tidyverse) # install.packages("tidyverse", ep = T)
+library(glue) # install.packages("glue", dep = T)
+library(tidyverse) # install.packages("tidyverse", dep = T)
 library(MASS)
 
 # === Functions ================================================================
