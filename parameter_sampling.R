@@ -221,7 +221,8 @@ class_labels <- sample(c(1, 2), N, replace = T)
 class_labels_0 <- class_labels
 
 num_iter <- 1000
-
+burn <- 100
+record <- matrix(0, nrow = N, ncol = num_iter - burn)
 
 for (qwe in 1:num_iter) {
 
@@ -243,7 +244,9 @@ for (qwe in 1:num_iter) {
       variance = variance
     )
   }
-  
+  if(qwe > burn){
+    record[, qwe - burn] <- t(class_labels)
+  }
 }
 
 plot_data <- data.frame(X = data, Index = 1:N, Class = class_labels)
