@@ -246,9 +246,13 @@ point_similarity <- function(cluster_record) {
   for(point in 1:(sample_size - 1)) {
     for (comparison_point in (point + 1):sample_size) {
     
-      similarity_mat[point, comparison_point] <- sum(
+      # Divide by num_iter to normalise
+      similarity <- sum(
         cluster_record[point, ] == cluster_record[comparison_point, ]
       ) / num_iter
+      
+      similarity_mat[point, comparison_point] <- similarity
+      similarity_mat[comparison_point, point] <- similarity
       
     }
   }
@@ -259,7 +263,7 @@ point_similarity <- function(cluster_record) {
 
 N <- 20
 k <- 2
-data <- c(rnorm(N / 2, -2, 1), rnorm(N / 2, 2, 1)) # hist(data)
+data <- c(rnorm(N / 2, -10, 1), rnorm(N / 2, 2, 1)) # hist(data)
 mu_0 <- 0
 df_0 <- 1
 scale_0 <- matrix(1)
@@ -302,15 +306,6 @@ for (qwe in 1:num_iter) {
 plot_data <- data.frame(X = data, Index = 1:N, Class = class_labels)
 ggplot(plot_data, aes(x = X, y = Index, colour = Class)) + geom_point()
 
-
-comp_table <- apply(t(record[1:2, 70:80]), MARGIN = 1, table)
-t(record[1:2, 1:20])
-
-row_of_interest <- 1
-record[row_of_interest, record[row_of_interest, ] == 1]
-comp_table
-apply(t(record[1:2, 70:80]), 2, all.equal)
-count_comp <- sum(record[1, ] == record[2, ])
-
 sim <- point_similarity(record)
+pheatmap(sim)
 pheatmap(1 - sim)
