@@ -3,11 +3,20 @@
 # === Libraries ================================================================
 
 library(expm) # install.packages("expm", dep = T)
+
+# string manipulation (not needed, merely for print statements)
 library(glue) # install.packages("glue", dep = T)
+
+# generally useful - only using ggplot2 currently
 library(tidyverse) # install.packages("tidyverse", dep = T)
 library(MASS)
+
+# for pretty heatmaps
 library(pheatmap) # install.packages("pheatmap", dep = T)
-library(mvtnorm) # install.packages("mvtnorm", dep = T)
+
+# for multivariate t distn
+library(LaplacesDemon) # install.packages("LaplacesDemon", dep = T)
+
 
 # === Functions ================================================================
 
@@ -370,6 +379,71 @@ entropy_window <- function(entropy_vec,
   }
 }
 
+# This function needs tidying
+postior_sense_check <- function(data, k, scale_0, mu_0, lambda_0, df_0, num_points = 1000){
+  
+  # Declare a bunch of empty variables
+  new_mu <- list()
+  new_variance <- list()
+  
+  scale_n_value <- list()
+  df_n <- rep(0, k)
+  mu_n <- rep(0, k)
+  lambda_n <- rep(0, k)
+  actual_posterior <- list()
+  plots <- list()
+  
+  # Iterate over clusters
+  for (j in 1:k) {
+    new_mu[[j]] <- rep(0, num_points)
+    # new_variance[[j]] <- matrix(0, ncol = 1, nrow = 1)
+    
+    cluster_data <- data[class_labels == j]
+    sample_mean <- mean(cluster_data)
+    sample_size <- length(cluster_data)
+    num_cols <- 1
+    
+    sample_covariance <- S_n(cluster_data, sample_mean, sample_size, num_cols)
+    
+    scale_n_value[[j]] <- scale_n(scale_0,
+                                  mu_0,
+                                  lambda_0,
+                                  sample_covariance,
+                                  sample_size,
+                                  sample_mean)
+    
+    df_n[j] <- df_0 + sample_size
+    lambda_n[j] <- lambda_0 + sample_size
+    
+    mu_n[j] <- mean_n(lambda_0, mu_0, sample_size, sample_mean)
+    
+    actual_posterior[[j]] <- rmvt(n = num_points,
+                                  df = df_n[[j]] - d + 1, 
+                                  mu= c(mu_n[[j]]),
+                                  S= scale_n_value[[j]]/(lambda_n[[j]] * (df_n[[j]] - d + 1))
+    )
+    
+    # Generate the desired number of values
+    for(i in 1:num_points){
+      # new_variance[[j]][i] <- variance_posterior(df_0, scale_0, lambda_0, mu_0, cluster_data)
+      new_mu[[j]][i] <- mean_posterior(mu_0, variance[[j]], lambda_0, cluster_data)
+    }
+    mu_data <- data.frame(Sample = new_mu[[j]], Actual = actual_posterior[[j]])
+    plots[[j]] <- ggplot(data= mu_data) +
+      geom_histogram(aes(x = Sample, y=..count../max(..count..)), colour = "black", fill = "steelblue2") +
+      geom_density(aes(x = Actual, y = ..scaled..), colour = "red", size = 0.8) + 
+      labs(title = "Comparison sampled vs predicted posteriors",
+           subtitle = paste("Cluster", j),
+           # caption = "Source: the Lahman baseball database", 
+           x = "Value", y = "Density") +
+      # ggtitle(paste("Comparison sampled vs predicted posteriors for cluster", k )) +
+      # xlab("Value") + ylab("Density") +
+      NULL
+  }
+  return(plots)
+  
+}
+
 # === Demo =====================================================================
 
 d <- 1
@@ -443,109 +517,6 @@ x <- entropy(class_weights)
 entropy_plot
 burn
 
-new_mu <- list()
-new_variance <- list()
 
-scale_n_value <- list()
-df_n <- rep(0, k)
-mu_n <- rep(0, k)
-lambda_n <- rep(0, k)
-
-for (j in 1:k) {
-  new_mu[[j]] <- rep(0, 100)
-  new_variance[[j]] <- matrix(0, ncol = 1, nrow = 1)
-  
-  cluster_data <- data[class_labels == j]
-  sample_mean <- mean(cluster_data)
-  sample_size <- length(cluster_data)
-  num_cols <- 1
-  
-  sample_covariance <- S_n(cluster_data, sample_mean, sample_size, num_cols)
-  
-  scale_n_value[[j]] <- scale_n(scale_0, 
-                   mu_0, 
-                   lambda_0, 
-                   sample_covariance, 
-                   sample_size,
-                   sample_mean)
-  
-  df_n[j] <- df_0 + sample_size
-  lambda_n[j] <- lambda_0 + sample_size
-  
-  mu_n[j] <- mean_n(lambda_0, mu_0, sample_size, sample_mean)
-  
-  for(i in 1:100){
-    new_variance[[j]][i] <- variance_posterior(df_0, scale_0, lambda_0, mu_0, cluster_data)
-    new_mu[[j]][i] <- mean_posterior(mu_0, variance[[j]], lambda_0, cluster_data)
-  }
-}
-
-hist(new_mu[[1]])
-hist(new_mu[[2]])
-
-hist(new_variance[[1]])
-hist(new_variance[[2]])
-
-num_points_cw <- 10
-
-
-inverse_variance_1 <- rWishart(num_points_cw, df_n[[1]], solve(scale_n_value[[1]])) # solve() inverts
-
-# For some reason this produces a 3D object, we want 2D I think
-inverse_variance_1 <- matrix(
-  inverse_variance,
-  dim(inverse_variance_1)[1],
-  dim(inverse_variance_1)[2]
-)
-
-# Solve for the covariance matrix
-variance_1 <- solve(inverse_variance_1)
-
-
-inverse_variance_2 <- rWishart(num_points_cw, df_n[[2]], solve(scale_n_value[[2]])) # solve() inverts
-
-# For some reason this produces a 3D object, we want 2D I think
-inverse_variance_2 <- matrix(
-  inverse_variance,
-  dim(inverse_variance_2)[1],
-  dim(inverse_variance_2)[2]
-)
-
-# Solve for the covariance matrix
-variance_2 <- solve(inverse_variance_2)
-
-actual_1 <- rmvt(n = num_points_cw,
-     df = df_n[[1]] - d + 1, 
-     mu= c(mu_n[[1]]),
-     S= scale_n_value[[1]]/(lambda_n[[1]] * (df_n[[1]] - d + 1))
-     )
-
-actual_2 <- rmvt(n = num_points_cw,
-                 df = df_n[[2]] - d + 1, 
-                 mu= c(mu_n[[2]]),
-                 S= scale_n_value[[2]]/(lambda_n[[2]] * (df_n[[2]] - d + 1))
-)
-
-# ggplot(data = actual_1)
-
-install.packages("LaplacesDemon", dep = T)
-library(LaplacesDemon)
-
-rmvt(n=1, mu, S, df=Inf)
-
-# x <- seq(-4, 4, length=100)
-# hx <- dnorm(x)
-# 
-# degf <- c(1, 3, 8, 30)
-# colors <- c("red", "blue", "darkgreen", "gold", "black")
-# labels <- c("df=1", "df=3", "df=8", "df=30", "normal")
-# 
-# plot(x, hx, type="l", lty=2, xlab="x value",
-#      ylab="Density", main="Comparison of t Distributions")
-# 
-# for (i in 1:4){
-#   lines(x, dt(x,degf[i]), lwd=2, col=colors[i])
-# }
-# 
-# legend("topright", inset=.05, title="Distributions",
-#        labels, lwd=2, lty=c(1, 1, 1, 1, 2), col=colors)
+p <- postior_sense_check(data, k, scale_0, mu_0, lambda_0, df_0, num_points = 1000)
+p
