@@ -396,7 +396,7 @@ postior_sense_check <- function(data, k, scale_0, mu_0, lambda_0, df_0, num_poin
   # Iterate over clusters
   for (j in 1:k) {
     new_mu[[j]] <- rep(0, num_points)
-    # new_variance[[j]] <- matrix(0, ncol = 1, nrow = 1)
+    new_variance[[j]] <- matrix(0, ncol = 1, nrow = 1)
 
     cluster_data <- data[class_labels == j]
     sample_mean <- mean(cluster_data)
@@ -423,10 +423,34 @@ postior_sense_check <- function(data, k, scale_0, mu_0, lambda_0, df_0, num_poin
                                   S= scale_n_value[[j]]/(lambda_n[[j]] * (df_n[[j]] - d + 1))
     )
     
+    
+    
+    
+    
     # Generate the desired number of values
     for(i in 1:num_points){
-      # new_variance[[j]][i] <- variance_posterior(df_0, scale_0, lambda_0, mu_0, cluster_data)
+      
+      new_variance[[j]][i] <- variance_posterior(df_0, scale_0, lambda_0, mu_0, cluster_data)[1, 1]
       new_mu[[j]][i] <- mean_posterior(mu_0, variance[[j]], lambda_0, cluster_data)
+      
+      
+      inverse_variance <- rWishart(n = 1,
+                                       df = df_n, 
+                                       sigma = solve(scale_n_value)
+      )
+      
+      inverse_variance <- rWishart(1, df_n, solve(scale_n_value)) # solve() inverts
+      
+      # For some reason this produces a 3D object, we want 2D I think
+      inverse_variance <- matrix(
+        inverse_variance,
+        dim(inverse_variance)[1],
+        dim(inverse_variance)[2]
+      )
+      
+      # Solve for the covariance matrix
+      actual_variance[[j]][i] <- solve(inverse_variance)[1, 1]
+      
     }
     mu_data <- data.frame(Sample = new_mu[[j]], Actual = actual_posterior[[j]])
     plots[[j]] <- ggplot(data = mu_data) +
@@ -519,3 +543,4 @@ burn
 
 p <- postior_sense_check(data, k, scale_0, mu_0, lambda_0, df_0, num_points = 1000)
 p
+
