@@ -404,30 +404,27 @@ postior_sense_check <- function(data, k, scale_0, mu_0, lambda_0, df_0, num_poin
     num_cols <- 1
 
     sample_covariance <- S_n(cluster_data, sample_mean, sample_size, num_cols)
-
-    scale_n_value[[j]] <- scale_n(
-      scale_0,
-      mu_0,
-      lambda_0,
-      sample_covariance,
-      sample_size,
-      sample_mean
-    )
-
+    
+    scale_n_value[[j]] <- scale_n(scale_0,
+                                  mu_0,
+                                  lambda_0,
+                                  sample_covariance,
+                                  sample_size,
+                                  sample_mean)
+    
     df_n[j] <- df_0 + sample_size
     lambda_n[j] <- lambda_0 + sample_size
-
+    
     mu_n[j] <- mean_n(lambda_0, mu_0, sample_size, sample_mean)
-
-    actual_posterior[[j]] <- rmvt(
-      n = num_points,
-      df = df_n[[j]] - d + 1,
-      mu = c(mu_n[[j]]),
-      S = scale_n_value[[j]] / (lambda_n[[j]] * (df_n[[j]] - d + 1))
+    
+    actual_posterior[[j]] <- rmvt(n = num_points,
+                                  df = df_n[[j]] - d + 1, 
+                                  mu= c(mu_n[[j]]),
+                                  S= scale_n_value[[j]]/(lambda_n[[j]] * (df_n[[j]] - d + 1))
     )
-
+    
     # Generate the desired number of values
-    for (i in 1:num_points) {
+    for(i in 1:num_points){
       # new_variance[[j]][i] <- variance_posterior(df_0, scale_0, lambda_0, mu_0, cluster_data)
       new_mu[[j]][i] <- mean_posterior(mu_0, variance[[j]], lambda_0, cluster_data)
     }
