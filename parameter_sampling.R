@@ -79,7 +79,7 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
   # sample_covariance <- 0
   
   sample_covariance <- matrix(0,nrow=num_cols,ncol=num_cols)
-  
+  print(glue("\n\n"))
   if(sample_size > 0){
     for (index in 1:sample_size) {
       sample_covariance <- (sample_covariance
@@ -87,10 +87,12 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
         %*% t(data[index, ] - sample_mean)
         )
       )
-      # print(glue("Sample covariance: \n{x}\n", x = sample_covariance))
+      print(glue("Sample covariance: \n{x}\n", x = sample_covariance))
     }
   }
-
+  print(glue("\n"))
+  print(sample_covariance)
+  print(glue("\n\n"))
   #   (data - sample_mean)
   #   %*% t(data - sample_mean)
   # )
@@ -131,10 +133,12 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
   #       )
 
   # Draw the variance as a single sample from a Wishart distribution
-  variance <- rWishart(1, df_n, scale_n)
+  inverse_variance <- rWishart(1, df_n, solve(scale_n))
 
   # For some reason this produces a 3D object, we want 2D I think
-  variance <- matrix(variance, dim(variance)[1], dim(variance)[2])
+  inverse_variance <- matrix(inverse_variance, dim(inverse_variance)[1], dim(inverse_variance)[2])
+  
+  variance <- solve(inverse_variance)
 }
 
 data_frame_mean <- function(data) {
