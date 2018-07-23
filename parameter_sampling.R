@@ -38,11 +38,9 @@ mean_posterior <- function(mu_0, variance, lambda_0, data) {
   )
 
   variance_n <- variance / lambda_n
-  # std_dev <- expm::sqrtm(variance_n) # wrong
-
+  
   # Take a single sample from the posterior
   mu <- mvrnorm(n = 1, mu_n, variance_n)
-  # mu <- rnorm(1, mu_n, std_dev)
 }
 
 variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
@@ -66,20 +64,12 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
     num_cols <- 1
   }
 
-  # data <- cluster_data
-
   # Convert data to matrix form for matrix multiplication in later steps
   data <- as.matrix(data)
 
   # Calculate the component parts of the new parameters
-  # Pretty sure this is wrong
-  # sample_covariance <- sum(
-  
-  # Does this need to be set as a p-vec?
-  # sample_covariance <- 0
-  
+
   sample_covariance <- matrix(0,nrow=num_cols,ncol=num_cols)
-  print(glue("\n\n"))
   if(sample_size > 0){
     for (index in 1:sample_size) {
       sample_covariance <- (sample_covariance
@@ -87,25 +77,8 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
         %*% t(data[index, ] - sample_mean)
         )
       )
-      print(glue("Sample covariance: \n{x}\n", x = sample_covariance))
     }
   }
-  print(glue("\n"))
-  print(sample_covariance)
-  print(glue("\n\n"))
-  #   (data - sample_mean)
-  #   %*% t(data - sample_mean)
-  # )
-
-  
-  
-  # print(glue("Sample covariance pre-sum:\n{x}\n", x = (data - sample_mean) %*% t(data - sample_mean)))
-  # print((data - sample_mean) %*% t(data - sample_mean))
-  # print(sum((data - sample_mean) %*% t(data - sample_mean)))
-  # print(rowSums((data - sample_mean) %*% t(data - sample_mean)))
-  # print("")
-  # print("")
-
 
   # The effective values of the lambda, df and scale given the data
   lambda_n <- lambda_0 + sample_size
@@ -118,26 +91,17 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
     * (sample_mean - mu_0) %*% t(sample_mean - mu_0)
   )
 
-  # print(glue("Sample covariance: \n{x}\n", x = sample_covariance))
-  # print(glue("Scale: \n{x}\n\n", x = scale_n))
-
-  # awk_part <- ((lambda_0 * sample_size) / (lambda_n)) * (sample_mean - mu_0) %*% t(sample_mean - mu_0)
-  #
-  # first_part <- ((lambda_0 * sample_size) / (lambda_n))
-  # sec_part <- (sample_mean - mu_0) %*% t(sample_mean - mu_0)
-
-  # print(glue("Components of scale_n\nTotal: {total}\nFirst comp: {first}\nSecond comp: {second}\n\n",
-  #            total = awk_part,
-  #            first = first_part,
-  #            second = sec_part)
-  #       )
-
-  # Draw the variance as a single sample from a Wishart distribution
-  inverse_variance <- rWishart(1, df_n, solve(scale_n))
+  # Draw the inverse of variance as a single sample from a Wishart distribution
+  # We invert the scale as the first step for moving to an inverse Wishart
+  inverse_variance <- rWishart(1, df_n, solve(scale_n)) # solve() inverts
 
   # For some reason this produces a 3D object, we want 2D I think
-  inverse_variance <- matrix(inverse_variance, dim(inverse_variance)[1], dim(inverse_variance)[2])
+  inverse_variance <- matrix(inverse_variance, 
+                             dim(inverse_variance)[1], 
+                             dim(inverse_variance)[2]
+                             )
   
+  # Solve for the covariance matrix
   variance <- solve(inverse_variance)
 }
 
@@ -168,13 +132,7 @@ class_weight_posterior <- function(concentration_0, class_labels, k) {
 
   # Need count of members of each class to update concentration parameter
   for (i in 1:k) {
-    # class_count[i] <- sum(class_labels == i)
-    #
-    # # This is the parameter of the posterior
-    # concenctration <- concentration_0 + class_count[i]
-    #
-    # class_weight[i] <- rgamma(k, concenctration)
-    #
+
     class_count <- sum(class_labels == i)
 
     # This is the parameter of the posterior
@@ -185,11 +143,6 @@ class_weight_posterior <- function(concentration_0, class_labels, k) {
 
   class_weight <- class_weight / sum(class_weight)
 
-  # # This is the parameter of the posterior
-  # concenctration <- concentration_0 + class_count
-  #
-  # # Draw k (one for each class) samples from the posterior dirichlet
-  # class_weight <- rdirichlet(k, concenctration)
 }
 
 sample_class <- function(point, data, k, class_weights,
@@ -265,7 +218,6 @@ concentration_0 <- rep(0.1, k)
 variance <- list()
 mu <- list()
 class_labels <- sample(c(1, 2), N, replace = T)
-# class_labels <- c(1, 1, 1, 2, 1, 2, 2, 2, 1, 1)
 class_labels_0 <- class_labels
 
 num_iter <- 1000
@@ -273,17 +225,7 @@ num_iter <- 1000
 
 for (qwe in 1:num_iter) {
 
-  # print("Initial class labels:")
-  # print(class_labels)
-  # print(glue("\n\nIteration: {iter}", iter = qwe))
-
   class_weights <- class_weight_posterior(concentration_0, class_labels, k)
-
-  # print(glue("Class weights: \n{x}, {y}\n",
-  #            x = signif(class_weights[1], 3),
-  #            y = signif(class_weights[2], 3)
-  #            )
-  #       )
 
   for (j in 1:k) {
     cluster_data <- data[class_labels == j]
@@ -292,29 +234,17 @@ for (qwe in 1:num_iter) {
     mu[[j]] <- mean_posterior(mu_0, variance[[j]], lambda_0, cluster_data)
   }
 
-  # print(glue("Class std: \n{x} \n{y}\n",
-  #            x = signif(sqrt(variance[[1]][1, 1]), 3),
-  #            y = signif(sqrt(variance[[2]][1, 1]), 3)
-  #            )
-  #       )
-
-  # print(glue("Class means: \n{x}\n{y}\n\n", x = mu[1], y = mu[2]))
-
   for (i in 1:N) {
-    # print(glue("Individual: {x}", x = i))
+    
     point <- data[i]
-    # print(glue("Value: {x}", x = point))
+    
     class_labels[i] <- sample_class(point, data, k, class_weights,
       mu = mu,
       variance = variance
     )
   }
-  # class_labels
-  # class_labels - class_labels_0
+  
 }
-
-class_labels
-class_labels - class_labels_0
 
 plot_data <- data.frame(X = data, Index = 1:N, Class = class_labels)
 ggplot(plot_data, aes(x = X, y = Index, colour = Class)) + geom_point()
