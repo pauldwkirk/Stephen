@@ -271,15 +271,20 @@ entropy <- function(class_weights){
 
 entropy_window <- function(entropy_vec, 
                            start = 1, 
-                           window_length = 20, 
-                           tolerance = 0.01
+                           window_length = 25, 
+                           tolerance = 0.001
                            ){
   # Find the point at which entropy stabilises in the iterations
   n <- length(entropy_vec)
-  search_range <- seq(from = start, to = n - window_length, by = window_length)
+  search_range <- seq(from = start,
+                      to = n - window_length,
+                      by = window_length
+                      )
   for(i in search_range){
     win_1 <- entropy_vec[i : (i + window_length - 1)]
-    win_2 <- entropy_vec[(i + window_length) : min((i + 2 * window_length - 1), n)]
+    win_2 <- entropy_vec[(i + window_length) 
+                         : min((i + 2 * window_length - 1), n)
+                         ]
     
     mean_1 <- mean(win_1)
     mean_2 <- mean(win_2)
@@ -296,9 +301,9 @@ entropy_window <- function(entropy_vec,
 
 # === Demo =====================================================================
 
-N <- 20
+N <- 100
 k <- 2
-data <- c(rnorm(N / 2, -1, 1), rnorm(N / 2, 1, 1)) # hist(data)
+data <- c(rnorm(N / 2, -2, 1), rnorm(N / 2, 2, 1)) # hist(data)
 mu_0 <- 0
 df_0 <- 1
 scale_0 <- matrix(1)
@@ -354,8 +359,6 @@ entropy_plot <- ggplot(data = entropy_data, mapping = aes(x = Index, y = Entropy
   xlab("Iteration") + ylab("Entropy") + 
   scale_color_manual(name = "", values = c(Burn = "red")) +
   NULL
-
-
 
 pheatmap(sim) # similarity
 pheatmap(1 - sim) # dissimilarity
