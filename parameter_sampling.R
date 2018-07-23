@@ -242,7 +242,7 @@ point_similarity <- function(cluster_record) {
   similarity_mat <- matrix(0, nrow = sample_size, ncol = sample_size)
   diag(similarity_mat) <- rep(1, sample_size)
   
-  # Triangular matrix so iterate over i in [1, n - 1] and j in [i + 1, n]
+  # symmetric matrix so iterate over i in [1, n - 1] and j in [i + 1, n]
   for(point in 1:(sample_size - 1)) {
     for (comparison_point in (point + 1):sample_size) {
     
@@ -251,6 +251,7 @@ point_similarity <- function(cluster_record) {
         cluster_record[point, ] == cluster_record[comparison_point, ]
       ) / num_iter
       
+      # Assign value to both points in the matrix (due to symmetry)
       similarity_mat[point, comparison_point] <- similarity
       similarity_mat[comparison_point, point] <- similarity
       
@@ -263,7 +264,7 @@ point_similarity <- function(cluster_record) {
 
 N <- 20
 k <- 2
-data <- c(rnorm(N / 2, -10, 1), rnorm(N / 2, 2, 1)) # hist(data)
+data <- c(rnorm(N / 2, -2, 1), rnorm(N / 2, 2, 1)) # hist(data)
 mu_0 <- 0
 df_0 <- 1
 scale_0 <- matrix(1)
@@ -307,5 +308,6 @@ plot_data <- data.frame(X = data, Index = 1:N, Class = class_labels)
 ggplot(plot_data, aes(x = X, y = Index, colour = Class)) + geom_point()
 
 sim <- point_similarity(record)
-pheatmap(sim)
-pheatmap(1 - sim)
+pheatmap(sim) # similarity
+pheatmap(1 - sim) # dissimilarity
+hist(data) # look at the data
