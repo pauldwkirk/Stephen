@@ -230,38 +230,37 @@ sample_class <- function(point, data, k, class_weights,
 # Compare similarity to other points based on assignment over iterations
 point_similarity <- function(cluster_record) {
   # How frequently are any two points in the same cluster across recorded iterations
-  
-  # cluster_record: (num_samples x num_iterations) matrix of ints representing 
+
+  # cluster_record: (num_samples x num_iterations) matrix of ints representing
   # the cluster each point is assigned to in a given iteration
-  
+
   # Record the number of points
   sample_size <- nrow(cluster_record)
   num_iter <- ncol(cluster_record)
-  
+
   # Initialise the similarity matrix
   similarity_mat <- matrix(0, nrow = sample_size, ncol = sample_size)
   diag(similarity_mat) <- rep(1, sample_size)
-  
+
   # symmetric matrix so iterate over i in [1, n - 1] and j in [i + 1, n]
-  for(point in 1:(sample_size - 1)) {
+  for (point in 1:(sample_size - 1)) {
     for (comparison_point in (point + 1):sample_size) {
-    
+
       # Divide by num_iter to normalise
       similarity <- sum(
         cluster_record[point, ] == cluster_record[comparison_point, ]
       ) / num_iter
-      
+
       # Assign value to both points in the matrix (due to symmetry)
       similarity_mat[point, comparison_point] <- similarity
       similarity_mat[comparison_point, point] <- similarity
-      
     }
   }
   return(similarity_mat)
 }
 
 
-entropy <- function(class_weights){
+entropy <- function(class_weights) {
   # Measure of convergence, entropy from Information theory
   # Class weights: vector of class_weights (numbers from unit interval)
   entropy_components <- class_weights * log(class_weights)
@@ -269,33 +268,51 @@ entropy <- function(class_weights){
   entropy <- sum(entropy_components)
 }
 
-entropy_window <- function(entropy_vec, 
-                           start = 1, 
-                           window_length = 25, 
-                           tolerance = 0.001
-                           ){
+entropy_window <- function(entropy_vec,
+                           start = 1,
+                           window_length = 25,
+                           mean_tolerance = 0.001,
+                           sd_tolerance = 0.001) {
   # Find the point at which entropy stabilises in the iterations
+
+  # entropy_vec: vector of numbers corresponding to entropy of each iteration
+  # start: integer instructing which iteration to start with (default is 1)
+  # window_length: number of iterations to consider when considering convergence
+  # (default is 25)
+  # mean_tolerance: how close the mean of the two windows must be to be
+  # considered converged (default is 0.001)
+  # sd_tolerance: how close the sd of the two windows must be to be
+  # considered converged (default is 0.001)
+
   n <- length(entropy_vec)
-  search_range <- seq(from = start,
-                      to = n - window_length,
-                      by = window_length
-                      )
-  for(i in search_range){
-    win_1 <- entropy_vec[i : (i + window_length - 1)]
-    win_2 <- entropy_vec[(i + window_length) 
-                         : min((i + 2 * window_length - 1), n)
-                         ]
-    
+
+  search_range <- seq(
+    from = start,
+    to = n - window_length,
+    by = window_length
+  )
+
+  for (i in search_range) {
+
+    # Create two windows looking forward from the current iteration and compare
+    # their means and standard deviations
+    win_1 <- entropy_vec[i:(i + window_length - 1)]
+    win_2 <- entropy_vec[(i + window_length)
+    :min((i + 2 * window_length - 1), n)]
+
     mean_1 <- mean(win_1)
     mean_2 <- mean(win_2)
-    
+
     sd_1 <- sd(win_1)
     sd_2 <- sd(win_2)
-    
-    if((abs(mean_1 - mean_2) < tolerance) + (abs(sd_1 - sd_2) < tolerance)){
+
+    # If the differences are less than the predefined tolerances, return this
+    # iteration as the point to burn up to
+    if ((abs(mean_1 - mean_2) < mean_tolerance)
+    + (abs(sd_1 - sd_2) < sd_tolerance)
+    ) {
       return(i)
     }
-    
   }
 }
 
@@ -351,12 +368,12 @@ entropy_data <- data.frame(Index = 1:num_iter, Entropy = entropy_cw)
 burn <- entropy_window(entropy_cw)
 
 entropy_plot <- ggplot(data = entropy_data, mapping = aes(x = Index, y = Entropy)) +
-  geom_point() + 
+  geom_point() +
   geom_vline(mapping = aes(xintercept = burn, colour = "Burn"), lty = 2) +
   # geom_smooth(se = F) +
-  # geom_line() + 
+  # geom_line() +
   ggtitle("Entropy over iterations including recommended burn") +
-  xlab("Iteration") + ylab("Entropy") + 
+  xlab("Iteration") + ylab("Entropy") +
   scale_color_manual(name = "", values = c(Burn = "red")) +
   NULL
 
