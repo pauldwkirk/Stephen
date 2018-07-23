@@ -260,6 +260,13 @@ point_similarity <- function(cluster_record) {
   return(similarity_mat)
 }
 
+
+entropy <- function(class_weights){
+  # Measure of convergence, entropy from Information theory
+  # Class weights: vector of class_weights (numbers from unit interval)
+  entropy <- sum(class_weights * log(class_weights))
+}
+
 # === Demo =====================================================================
 
 N <- 20
