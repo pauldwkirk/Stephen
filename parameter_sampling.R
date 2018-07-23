@@ -6,6 +6,7 @@ library(expm) # install.packages("expm", dep = T)
 library(glue) # install.packages("glue", dep = T)
 library(tidyverse) # install.packages("tidyverse", dep = T)
 library(MASS)
+library(pheatmap) # install.packages("pheatmap", dep = T)
 
 # === Functions ================================================================
 
@@ -24,21 +25,20 @@ mean_posterior <- function(mu_0, variance, lambda_0, data) {
   }
   if (inherits(data, "data.frame")) {
     sample_size <- nrow(data)
-    
-    if(sample_size){
+
+    if (sample_size) {
       sample_mean <- data_frame_mean(data)
     } else {
       sample_mean <- rep(0, num_cols)
     }
-    
   } else {
     sample_size <- length(data)
   }
 
   # Calculate the various components of the posterior parameters
-  if(sample_size){
+  if (sample_size) {
     sample_mean <- mean(data)
-  } else{
+  } else {
     sample_mean <- 0
   }
 
@@ -49,7 +49,7 @@ mean_posterior <- function(mu_0, variance, lambda_0, data) {
   )
 
   variance_n <- variance / lambda_n
-  
+
   # Take a single sample from the posterior
   mu <- mvrnorm(n = 1, mu_n, variance_n)
 }
@@ -69,22 +69,20 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
     sample_size <- nrow(data)
 
     num_cols <- ncol(data)
-    
-    if(sample_size > 0){
+
+    if (sample_size > 0) {
       sample_mean <- data_frame_mean(data)
     } else {
       sample_mean <- rep(0, num_cols)
     }
-    
   } else {
     sample_size <- length(data)
     num_cols <- 1
-    if(sample_size > 0){
+    if (sample_size > 0) {
       sample_mean <- mean(data)
     } else {
       sample_mean <- 0
     }
-    
   }
 
   # Convert data to matrix form for matrix multiplication in later steps
@@ -92,8 +90,8 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
 
   # Calculate the component parts of the new parameters
 
-  sample_covariance <- matrix(0,nrow=num_cols,ncol=num_cols)
-  if(sample_size > 0){
+  sample_covariance <- matrix(0, nrow = num_cols, ncol = num_cols)
+  if (sample_size > 0) {
     for (index in 1:sample_size) {
       sample_covariance <- (sample_covariance
       + ((data[index, ] - sample_mean)
@@ -119,11 +117,12 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
   inverse_variance <- rWishart(1, df_n, solve(scale_n)) # solve() inverts
 
   # For some reason this produces a 3D object, we want 2D I think
-  inverse_variance <- matrix(inverse_variance, 
-                             dim(inverse_variance)[1], 
-                             dim(inverse_variance)[2]
-                             )
-  
+  inverse_variance <- matrix(
+    inverse_variance,
+    dim(inverse_variance)[1],
+    dim(inverse_variance)[2]
+  )
+
   # Solve for the covariance matrix
   variance <- solve(inverse_variance)
 }
@@ -155,10 +154,9 @@ class_weight_posterior <- function(concentration_0, class_labels, k) {
 
   # Need count of members of each class to update concentration parameter
   for (i in 1:k) {
-    
-    if(any(class_labels == i)){
+    if (any(class_labels == i)) {
       class_count <- sum(class_labels == i)
-    } else{
+    } else {
       class_count <- 0
     }
 
@@ -169,7 +167,6 @@ class_weight_posterior <- function(concentration_0, class_labels, k) {
   }
 
   class_weight <- class_weight / sum(class_weight)
-
 }
 
 sample_class <- function(point, data, k, class_weights,
@@ -230,6 +227,34 @@ sample_class <- function(point, data, k, class_weights,
   pred <- 1 + sum(u > cumsum(prob))
 }
 
+# Compare similarity to other points based on assignment over iterations
+point_similarity <- function(cluster_record) {
+  # How frequently are any two points in the same cluster across recorded iterations
+  
+  # cluster_record: (num_samples x num_iterations) matrix of ints representing 
+  # the cluster each point is assigned to in a given iteration
+  
+  # Record the number of points
+  sample_size <- nrow(cluster_record)
+  num_iter <- ncol(cluster_record)
+  
+  # Initialise the similarity matrix
+  similarity_mat <- matrix(0, nrow = sample_size, ncol = sample_size)
+  diag(similarity_mat) <- rep(1, sample_size)
+  
+  # Triangular matrix so iterate over i in [1, n - 1] and j in [i + 1, n]
+  for(point in 1:(sample_size - 1)) {
+    for (comparison_point in (point + 1):sample_size) {
+    
+      similarity_mat[point, comparison_point] <- sum(
+        cluster_record[point, ] == cluster_record[comparison_point, ]
+      ) / num_iter
+      
+    }
+  }
+  return(similarity_mat)
+}
+
 # === Demo =====================================================================
 
 N <- 20
@@ -252,29 +277,40 @@ burn <- 100
 record <- matrix(0, nrow = N, ncol = num_iter - burn)
 
 for (qwe in 1:num_iter) {
-
   class_weights <- class_weight_posterior(concentration_0, class_labels, k)
 
   for (j in 1:k) {
     cluster_data <- data[class_labels == j]
-    
+
     variance[[j]] <- variance_posterior(df_0, scale_0, lambda_0, mu_0, cluster_data)
     mu[[j]] <- mean_posterior(mu_0, variance[[j]], lambda_0, cluster_data)
   }
 
   for (i in 1:N) {
-    
     point <- data[i]
-    
+
     class_labels[i] <- sample_class(point, data, k, class_weights,
       mu = mu,
       variance = variance
     )
   }
-  if(qwe > burn){
+  if (qwe > burn) {
     record[, qwe - burn] <- t(class_labels)
   }
 }
 
 plot_data <- data.frame(X = data, Index = 1:N, Class = class_labels)
 ggplot(plot_data, aes(x = X, y = Index, colour = Class)) + geom_point()
+
+
+comp_table <- apply(t(record[1:2, 70:80]), MARGIN = 1, table)
+t(record[1:2, 1:20])
+
+row_of_interest <- 1
+record[row_of_interest, record[row_of_interest, ] == 1]
+comp_table
+apply(t(record[1:2, 70:80]), 2, all.equal)
+count_comp <- sum(record[1, ] == record[2, ])
+
+sim <- point_similarity(record)
+pheatmap(1 - sim)
