@@ -24,12 +24,23 @@ mean_posterior <- function(mu_0, variance, lambda_0, data) {
   }
   if (inherits(data, "data.frame")) {
     sample_size <- nrow(data)
+    
+    if(sample_size){
+      sample_mean <- data_frame_mean(data)
+    } else {
+      sample_mean <- rep(0, num_cols)
+    }
+    
   } else {
     sample_size <- length(data)
   }
 
   # Calculate the various components of the posterior parameters
-  sample_mean <- mean(data)
+  if(sample_size){
+    sample_mean <- mean(data)
+  } else{
+    sample_mean <- 0
+  }
 
   lambda_n <- lambda_0 + sample_size
 
@@ -56,12 +67,24 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
   }
   if (inherits(data, "data.frame")) {
     sample_size <- nrow(data)
-    sample_mean <- data_frame_mean(data)
+
     num_cols <- ncol(data)
+    
+    if(sample_size > 0){
+      sample_mean <- data_frame_mean(data)
+    } else {
+      sample_mean <- rep(0, num_cols)
+    }
+    
   } else {
     sample_size <- length(data)
-    sample_mean <- mean(data)
     num_cols <- 1
+    if(sample_size > 0){
+      sample_mean <- mean(data)
+    } else {
+      sample_mean <- 0
+    }
+    
   }
 
   # Convert data to matrix form for matrix multiplication in later steps
@@ -132,8 +155,12 @@ class_weight_posterior <- function(concentration_0, class_labels, k) {
 
   # Need count of members of each class to update concentration parameter
   for (i in 1:k) {
-
-    class_count <- sum(class_labels == i)
+    
+    if(any(class_labels == i)){
+      class_count <- sum(class_labels == i)
+    } else{
+      class_count <- 0
+    }
 
     # This is the parameter of the posterior
     concentration <- concentration_0 + class_count
@@ -207,7 +234,7 @@ sample_class <- function(point, data, k, class_weights,
 
 N <- 20
 k <- 2
-data <- c(rnorm(N / 2, -50, 1), rnorm(N / 2, 50, 1))
+data <- c(rnorm(N / 2, -2, 1), rnorm(N / 2, 2, 1)) # hist(data)
 mu_0 <- 0
 df_0 <- 1
 scale_0 <- matrix(1)
@@ -230,7 +257,7 @@ for (qwe in 1:num_iter) {
 
   for (j in 1:k) {
     cluster_data <- data[class_labels == j]
-
+    
     variance[[j]] <- variance_posterior(df_0, scale_0, lambda_0, mu_0, cluster_data)
     mu[[j]] <- mean_posterior(mu_0, variance[[j]], lambda_0, cluster_data)
   }
