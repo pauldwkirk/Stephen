@@ -17,6 +17,11 @@ library(pheatmap) # install.packages("pheatmap", dep = T)
 # for multivariate t distn
 library(LaplacesDemon) # install.packages("LaplacesDemon", dep = T)
 
+# for colouring pheatmap
+library(RColorBrewer)
+
+# an alternative colour schema
+library(ghibli) # install.packages("ghibli")
 
 # === Functions ================================================================
 
@@ -47,12 +52,12 @@ mean_n <- function(lambda_0, mu_0, sample_size, sample_mean) {
 
 S_n <- function(data, sample_mean, sample_size, num_cols) {
   # Calculates S_n for variance posterior
-  
+
   # Data: data relevant to current cluster
   # Sample_mean: mean of data
   # sample_size: number of elements of data
   # num_cols: the dimensionality of data (and hence of S_n)
-  
+
   # Convert data to matrix form for matrix multiplication in later steps
   data <- as.matrix(data)
   sample_covariance <- matrix(0, nrow = num_cols, ncol = num_cols)
@@ -74,7 +79,7 @@ scale_n <- function(scale_0,
                     sample_covariance,
                     sample_size,
                     sample_mean) {
-  
+
   # Calculates scale in nth iteration for a given cluster for variance posterior
   # scale_0: int; prior for scale of inverse Wishart
   # mu_0: int; prior of mean for Normal
@@ -125,7 +130,7 @@ mean_posterior <- function(mu_0, variance, lambda_0, data) {
 
   lambda_n <- lambda_0 + sample_size
   mu_n <- mean_n(lambda_0, mu_0, sample_size, sample_mean)
-  
+
   variance_n <- variance / lambda_n
 
   # Take a single sample from the posterior
@@ -551,6 +556,8 @@ burn <- 0
 record <- matrix(0, nrow = N, ncol = num_iter - burn)
 entropy_cw <- rep(0, num_iter)
 
+# --- Gibbs sampling -----------------------------------------------------------
+
 for (qwe in 1:num_iter) {
   class_weights <- class_weight_posterior(concentration_0, class_labels, k)
   entropy_cw[qwe] <- entropy(class_weights)
@@ -575,6 +582,8 @@ for (qwe in 1:num_iter) {
 }
 
 sim <- point_similarity(record)
+
+# --- Plotting -----------------------------------------------------------------
 
 entropy_data <- data.frame(Index = 1:num_iter, Entropy = entropy_cw)
 
@@ -602,5 +611,63 @@ entropy_plot
 burn
 
 
-p <- postior_sense_check(data, k, scale_0, mu_0, lambda_0, df_0, num_points = 1000)
+p <- postior_sense_check(data, k, scale_0, mu_0, lambda_0, df_0, 
+                         num_points = 1000
+                         )
 p
+
+# --- Heatmapping --------------------------------------------------------------
+
+# Trying to add row annotation to pheatmap
+dissim <- 1 - sim
+
+# Require names to associate data in annotation columns with original data
+colnames(dissim) <- paste0("Test", 1:100)
+rownames(dissim) <- paste0("Gene", 1:100)
+
+# Example input for annotation_col in pheatmap
+annotation_col <- data.frame(CellType = rep(c("CT1", "CT2"), 50))
+rownames(annotation_col) <- paste("Test", 1:100, sep = "")
+
+# Example input for annotation_row in pheatmap
+annotation_row <- data.frame(Class_label = factor(class_labels, 
+                                                  labels = c("Exp1", "Exp2")
+                                                  )
+                             )
+
+rownames(annotation_row) <- rownames(dissim)
+
+# Include some NAs
+annotation_row[c(10:20, 90:100), 1] <- NA
+
+# This adds annotation as a row - i.e. a comment on the columns
+pheatmap(dissim, 
+         annotation_col = annotation_col, 
+         annotation_row = annotation_row
+         )
+
+
+# Colour scheme
+col_pal <- RColorBrewer::brewer.pal(9, "Blues")
+col_pal_alt <- ghibli_palette("MononokeLight", 21, type = "continuous")
+
+ann_colors <- list(
+  # Time = c("white", "firebrick"),
+  Class_label = c(Exp1 = "#C7E9C0", Exp2 = "#00441B"),
+  CellType = c(CT1 = "#7570B3", CT2 = "#E7298A")
+)
+
+# More full heatmap
+pheatmap(dissim,
+  annotation_col = annotation_col,
+  annotation_row = annotation_row,
+  annotation_colors = ann_colors,
+  main = "Exmample Heatmap",
+  cluster_row = T, # adds hierarchical clustering across rows
+  cluster_cols = T, # adds hierarchical clustering across cols
+  color = col_pal, # col_pal_alt,
+  fontsize = 6.5,
+  fontsize_row = 6,
+  fontsize_col = 6,
+  gaps_col = 50 # only has an effect when cluster_cols = F
+)
