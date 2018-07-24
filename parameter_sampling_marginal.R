@@ -35,12 +35,24 @@ data_frame_mean <- function(data) {
 
 # --- Parameters in nth iteration ----------------------------------------------
 mean_n <- function(lambda_0, mu_0, sample_size, sample_mean) {
+  # Calculates mu_n in nth iteration for a given cluster for mean posterior
+  # lambda_0: prior for dividing variance for Normal
+  # mu_0: int; prior of mean for Normal
+  # sample_size: number of elements of current cluster
+  # sample_mean: mean of current cluster
   mu_n <- ((lambda_0 * mu_0 + sample_size * sample_mean)
   / (lambda_0 + sample_size)
   )
 }
 
 S_n <- function(data, sample_mean, sample_size, num_cols) {
+  # Calculates S_n for variance posterior
+  
+  # Data: data relevant to current cluster
+  # Sample_mean: mean of data
+  # sample_size: number of elements of data
+  # num_cols: the dimensionality of data (and hence of S_n)
+  
   # Convert data to matrix form for matrix multiplication in later steps
   data <- as.matrix(data)
   sample_covariance <- matrix(0, nrow = num_cols, ncol = num_cols)
@@ -62,6 +74,14 @@ scale_n <- function(scale_0,
                     sample_covariance,
                     sample_size,
                     sample_mean) {
+  
+  # Calculates scale in nth iteration for a given cluster for variance posterior
+  # scale_0: int; prior for scale of inverse Wishart
+  # mu_0: int; prior of mean for Normal
+  # lambda_0: prior for dividing variance for Normal
+  # sample_covariance: output of S_n for given cluster
+  # sample_size: number of elements of data
+  # sample_mean: mean of data
   scale_n <- (scale_0
   + sample_covariance
     + ((lambda_0 * sample_size) / (lambda_0 + sample_size))
@@ -104,13 +124,8 @@ mean_posterior <- function(mu_0, variance, lambda_0, data) {
   }
 
   lambda_n <- lambda_0 + sample_size
-
-  # mu_n <- ((lambda_0 * mu_0 + sample_size * sample_mean)
-  # / (lambda_n)
-  # )
-
   mu_n <- mean_n(lambda_0, mu_0, sample_size, sample_mean)
-
+  
   variance_n <- variance / lambda_n
 
   # Take a single sample from the posterior
@@ -152,30 +167,12 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
   data <- as.matrix(data)
 
   # Calculate the component parts of the new parameters
-
   sample_covariance <- S_n(data, sample_mean, sample_size, num_cols)
-  # sample_covariance <- matrix(0, nrow = num_cols, ncol = num_cols)
-  # if (sample_size > 0) {
-  #   for (index in 1:sample_size) {
-  #     sample_covariance <- (sample_covariance
-  #     + ((data[index, ] - sample_mean)
-  #       %*% t(data[index, ] - sample_mean)
-  #       )
-  #     )
-  #   }
-  # }
+
 
   # The effective values of the lambda, df and scale given the data
   lambda_n <- lambda_0 + sample_size
-
   df_n <- df_0 + sample_size
-
-  # scale_n <- (scale_0
-  # + sample_covariance
-  #   + ((lambda_0 * sample_size) / (lambda_n))
-  #   * (sample_mean - mu_0) %*% t(sample_mean - mu_0)
-  # )
-
   scale_n_value <- scale_n(
     scale_0,
     mu_0,
