@@ -33,23 +33,23 @@ gibbs_sampler <- function(fm, num_iter = 5) {
   
   for (i in 1:num_iter) {
     # the number of desired iterations in our Gibbs sampler
-    print(paste("Iteration number:", i))
+    # print(paste("Iteration number:", i))
     for (j in 1:N) {
       # for each entry
-      print(paste("Individual number:", j))
+      # print(paste("Individual number:", j))
       
       
       # Remove the current entry from the data and compare models
       # including and excluding it
       
       # Current entry and class
-      curr_entry <- data[j] # univariate
+      curr_entry <- data[j, ] # univariate
       curr_class <- class_labels[j]
       
-      if(j == 1)
-      {
-        print("debug")
-      }
+      # if(j == 1)
+      # {
+      #   # print("debug")
+      # }
       # Update the data to reflect removing the current point
       q[[curr_class]] <- del_item(q[[curr_class]], curr_entry) 
       class_table[curr_class] <- class_table[curr_class] - 1
@@ -63,16 +63,16 @@ gibbs_sampler <- function(fm, num_iter = 5) {
         print(prob)
       }
       
-      print(glue("Curr entry value: {value}", value = curr_entry))
+      # print(glue("Curr entry value: {value}", value = curr_entry))
       
 
       # q[k] is a Gaussian, q is a mixture of gaussians
       for (l in 1:k) {
-        print(glue("Curr variance value: {value}", value = q[[l]]$C))
+        # print(glue("Curr variance value: {value}", value = q[[l]]$C))
         prob[l] <- prob[l] + log_predictive(q[[l]], curr_entry)
       }
       
-      print("hi")
+      # print("hi")
       
       prob <- exp(prob - max(prob))
       prob <- prob / sum(prob)
@@ -83,24 +83,24 @@ gibbs_sampler <- function(fm, num_iter = 5) {
       # Assign to class based on cumulative probabilities
       pred <- 1 + sum(u > cumsum(prob)) #
   
-      print(table(class_labels))
-      print("Numbers in each class:")
-      print(q[[1]]$n)
-      print(q[[2]]$n)
+      # print(table(class_labels))
+      # print("Numbers in each class:")
+      # print(q[[1]]$n)
+      # print(q[[2]]$n)
       
           
       # add the current entry back into model (component q[k])
       class_labels[j] <- pred
       class_table[pred] <- class_table[pred] + 1
-      q[[pred]] <- add_item(q[[pred]], data[j])
+      q[[pred]] <- add_item(q[[pred]], data[j, ])
       
-      print(table(class_labels))
-      print("Numbers in each class:")
-      print(q[[1]]$n)
-      print(q[[2]]$n)
+      # print(table(class_labels))
+      # print("Numbers in each class:")
+      # print(q[[1]]$n)
+      # print(q[[2]]$n)
 
       
-      print(class_table)
+      # print(class_table)
       
     }
   }
@@ -122,7 +122,7 @@ fm_init <- function(k, a, q0, data, class_label) {
   
   fm             <- list()
   fm$k           <- k
-  fm$n           <- length(data)
+  fm$n           <- nrow(data)
   fm$a           <- a
   fm$q           <- list()
   fm$data        <- data
@@ -137,7 +137,7 @@ fm_init <- function(k, a, q0, data, class_label) {
   
   for (i in 1:fm$n) {
     class               <- class_label[i]
-    fm$q[[class]]       <- add_item(fm$q[[class]], data[i])
+    fm$q[[class]]       <- add_item(fm$q[[class]], data[i,])
     fm$class_pop[class] <- fm$class_pop[class] + 1
   }
   return(fm)
@@ -145,6 +145,12 @@ fm_init <- function(k, a, q0, data, class_label) {
 
 Gaussian <- function(d, var_coef, df, mean_prior, cluster_cov) {
   # Returns a list of the various components required of a Gaussian distn
+  
+  # d: int; dimensionality
+  # var_coef: number; cluster seperability
+  # df: number; degrees of freedom for inverse Wishart
+  # mean_prior: d-vector
+  # cluster_cov: (dxd) mean covariance matrix of clusters
   q           <- list()
   precision   <- 1 / var_coef
   S           <- cluster_cov * df
@@ -153,6 +159,8 @@ Gaussian <- function(d, var_coef, df, mean_prior, cluster_cov) {
   q$n         <- 0 # Number of members in distn (initialised to 0)
   q$precision <- precision
   q$df        <- df # degress of freedom
+  
+  # Consider changing * to %*%
   q$C         <- chol(S + precision * mean_prior * mean_prior) # Cholesky factorisation of covariance
   q$X         <- precision * mean_prior # Some score thing? Not sure how this combines with a new point
   q$Z0        <- evidence(q$d, q$n, q$precision, q$df, q$C, q$X) # could use q alone
@@ -253,19 +261,29 @@ del_item <- function(q, x){
 
 set.seed(1)
 # demo of finite mixture model in 1D
-dd <- 1
+
 KK <- 2
 NN <- 10
 # xx = [-2+.5*randn(1,5) 2+.5*randn(1,5)];
 # xx <- c(rnorm(NN / 2, -2, 1), rnorm(NN / 2, 2, 1))
-xx <- unlist(read.csv(file = "dataFile.csv", header= F))  
+
+# 1D data
+xx <- as.matrix(unlist(read.csv(file = "dataFile.csv", header= F)))
+
+# 2D data
+xx <- as.matrix(t(read.csv(file = "dataFile_2D.csv", header= F)))
+
+# 2D data identical in first dimension
+xx <- as.matrix(t(read.csv(file = "dataFile_2D_alt.csv", header= F)))
+
+dd <- ncol(xx) # maybe dim(xx)[2]
 aa <- 1
 s0 <- 3
 ss <- 1
 numiter <- 1000
 hh.dd <- dd
 hh.ss <- s0^2 / ss^2
-hh.vv <- 5
+hh.vv <- 1
 hh.VV <- ss^2 * diag(dd)
 # hh.uu <- matrix(0, nrow = dd, ncol = 1)
 hh.uu <- rep(0, dd)
@@ -281,7 +299,18 @@ record.pp <- matrix(0, nrow = numiter, ncol = length(yy)) # densities
 # initialize finite mixture with data items.
 # xx = num2cell(xx)
 zz <- sample(1:KK, NN, replace = TRUE)
-q0 <- Gaussian(hh.dd, hh.ss, hh.vv, hh.VV, hh.uu)
+
+# d: int; dimensionality
+# var_coef: number; cluster seperability
+# df: number; degrees of freedom for inverse Wishart
+# mean_prior: d-vector
+# cluster_cov: (dxd) mean covariance matrix of clusters
+
+q0 <- Gaussian(hh.dd, hh.ss, hh.vv, hh.uu, hh.VV)
+
+ramcmc::chol_update(q0$C, xx[1, ])
+q0$X + xx[1, ]
+
 
 fm0 <- fm_init(2, aa, q0, xx, zz)
 
@@ -290,72 +319,72 @@ fm0 <- fm_init(2, aa, q0, xx, zz)
 
 # --- Gibbs --------------------------------------------------------------------
 
-fm <- gibbs_sampler(fm0, num_iter = 5)
+fm <- gibbs_sampler(fm0, num_iter = 1000)
 
 # Expect problems
-
-# % run
-# for (iter in 1:numiter) {
-#   # fprintf(1, "finite mixture: iter# %d\r", iter)
-#
-#   # % gibbs iteration
-#   fm <- gibbs_sampler(fm0, num_iter = 5)
+# 
+# # % run
+# # for (iter in 1:numiter) {
+# #   # fprintf(1, "finite mixture: iter# %d\r", iter)
+# #
+# #   # % gibbs iteration
+# #   fm <- gibbs_sampler(fm0, num_iter = 5)
+# # }
+# 
+# # Sample of not working. Go through single iteration of Gibbs sampler step by step
+# fm           <- fm0
+# k            <- fm$k
+# N            <- fm$n
+# alpha        <- fm$a
+# q            <- fm$q
+# data         <- fm$data
+# class_labels <- fm$class_label
+# class_table  <- fm$class_pop
+# 
+# num_iter <- 1 # first iteration of gibbs_sampler UDF
+# j <- 1 # i.e. first data point
+# # for each entry
+# 
+# # Remove the current entry from the data and compare models
+# # including and excluding it
+# 
+# # Current entry and class
+# curr_entry <- data[j] # univariate
+# curr_class <- class_labels[j]
+# 
+# # Update the data to reflect removing the current point
+# q[[curr_class]] <- del_item(q[[curr_class]], curr_entry)
+# class_table[curr_class] <- class_table[curr_class] - 1
+# 
+# # Calculate the probabilities for belonging to each class
+# # Log, exp to handle awkward numbers
+# prob <- log(class_table + alpha / k)
+# 
+# 
+# # q[k] is a Gaussian, q is a mixture of gaussians
+# 
+# # --- Breakpoint ---------------------------------------------------------------
+# for (l in 1:k) {
+#   prob[l] <- prob[l] + log_predictive(q[[l]], curr_entry)
 # }
-
-# Sample of not working. Go through single iteration of Gibbs sampler step by step
-fm           <- fm0
-k            <- fm$k
-N            <- fm$n
-alpha        <- fm$a
-q            <- fm$q
-data         <- fm$data
-class_labels <- fm$class_label
-class_table  <- fm$class_pop
-
-num_iter <- 1 # first iteration of gibbs_sampler UDF
-j <- 1 # i.e. first data point
-# for each entry
-
-# Remove the current entry from the data and compare models
-# including and excluding it
-
-# Current entry and class
-curr_entry <- data[j] # univariate
-curr_class <- class_labels[j]
-
-# Update the data to reflect removing the current point
-q[[curr_class]] <- del_item(q[[curr_class]], curr_entry)
-class_table[curr_class] <- class_table[curr_class] - 1
-
-# Calculate the probabilities for belonging to each class
-# Log, exp to handle awkward numbers
-prob <- log(class_table + alpha / k)
-
-
-# q[k] is a Gaussian, q is a mixture of gaussians
-
-# --- Breakpoint ---------------------------------------------------------------
-for (l in 1:k) {
-  prob[l] <- prob[l] + log_predictive(q[[l]], curr_entry)
-}
-
-prob <- exp(prob - max(prob))
-prob <- prob / sum(prob)
-
-# tends to break before here, if interested this is just the inners of
-# the UDF gibbs_sampler
-
-# Rnadom number used to assign class in this iteration
-u <- runif(1)
-
-# Assign to class based on cumulative probabilities
-pred <- 1 + sum(u > cumsum(prob)) #
-
-# add the current entry back into model (component q[k])
-class_labels[j] <- pred
-
-class_table[pred] <- class_table[pred] + 1
-q[[k]] <- add_item(q[[k]], data[j])
-
-
-q
+# 
+# prob <- exp(prob - max(prob))
+# prob <- prob / sum(prob)
+# 
+# # tends to break before here, if interested this is just the inners of
+# # the UDF gibbs_sampler
+# 
+# # Rnadom number used to assign class in this iteration
+# u <- runif(1)
+# 
+# # Assign to class based on cumulative probabilities
+# pred <- 1 + sum(u > cumsum(prob)) #
+# 
+# # add the current entry back into model (component q[k])
+# class_labels[j] <- pred
+# 
+# class_table[pred] <- class_table[pred] + 1
+# q[[k]] <- add_item(q[[k]], data[j])
+# 
+# 
+# q
