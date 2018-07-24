@@ -246,17 +246,16 @@ sample_class <- function(point, data, k, class_weights,
   # mu: vector of current estimates for mean of each cluster
   # variance: vector of current estimates for variance of each cluster
 
-  # This if statement does not work
-  # if (
-  #   !(
-  #     (
-  #       is.null(mu) & is.null(variance) & !(is.null(variance))
-  #     )
-  #     | (!(is.null(mu)) & !(is.null(variance)) & is.null(variance))
-  #   )
-  # ) {
-  #   stop("Either both mu and variance should be declared or neither. ")
-  # }
+  if (
+    !(
+      (
+        is.null(mu) & is.null(variance) & !(is.null(q))
+      )
+      | (!(is.null(mu)) & !(is.null(variance)) & is.null(q))
+    )
+  ) {
+    stop("Either mu and variance should be declared or else q. ")
+  }
 
   prob <- rep(0, k)
   for (i in 1:k) {
