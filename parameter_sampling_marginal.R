@@ -380,87 +380,151 @@ entropy_window <- function(entropy_vec,
 }
 
 # This function needs tidying
-postior_sense_check <- function(data, k, scale_0, mu_0, lambda_0, df_0, num_points = 1000) {
+postior_sense_check <- function(data, k, scale_0, mu_0, lambda_0, df_0,
+                                num_points = 1000) {
+  # Returns plots comparing the distribution actually being sampled with the
+  # derived distribution for both mean and variance
+  # Data: the data used in Gibbs sampler
+  # k: int; number of clusters
+  # scale_0: int; prior for scale of inverse Wishart
+  # mu_0: int; prior of mean for Normal
+  # lambda_0: prior for dividing variance for Normal
+  # df_0: prior for degrees of freedom for inverse Wishart
+  # num_points: int; number of points to draw from distributions
 
   # Declare a bunch of empty variables
-  new_mu <- list()
-  new_variance <- list()
+  sampled_mean <- list()
+  sampled_variance <- list()
 
   scale_n_value <- list()
   df_n <- rep(0, k)
   mu_n <- rep(0, k)
   lambda_n <- rep(0, k)
-  actual_posterior <- list()
+  posterior_mean <- list()
+  posterior_variance <- list()
+
+  # plots is the output, a plot of the sampled vs predicted means and variances
+  # for each cluster
   plots <- list()
+  plots$mean <- list()
+  plots$variance <- list()
 
   # Iterate over clusters
   for (j in 1:k) {
-    new_mu[[j]] <- rep(0, num_points)
-    new_variance[[j]] <- matrix(0, ncol = 1, nrow = 1)
 
+    # Declare the current cluster sample variables
+    sampled_mean[[j]] <- rep(0, num_points)
+    sampled_variance[[j]] <- matrix(0, ncol = 1, nrow = 1)
+    posterior_variance[[j]] <- rep(0, num_points)
+
+    # The various parameters and variables required for the sampling
     cluster_data <- data[class_labels == j]
     sample_mean <- mean(cluster_data)
     sample_size <- length(cluster_data)
     num_cols <- 1
 
     sample_covariance <- S_n(cluster_data, sample_mean, sample_size, num_cols)
-    
-    scale_n_value[[j]] <- scale_n(scale_0,
-                                  mu_0,
-                                  lambda_0,
-                                  sample_covariance,
-                                  sample_size,
-                                  sample_mean)
-    
+
+    scale_n_value[[j]] <- scale_n(
+      scale_0,
+      mu_0,
+      lambda_0,
+      sample_covariance,
+      sample_size,
+      sample_mean
+    )
+
     df_n[j] <- df_0 + sample_size
     lambda_n[j] <- lambda_0 + sample_size
-    
+
     mu_n[j] <- mean_n(lambda_0, mu_0, sample_size, sample_mean)
-    
-    actual_posterior[[j]] <- rmvt(n = num_points,
-                                  df = df_n[[j]] - d + 1, 
-                                  mu= c(mu_n[[j]]),
-                                  S= scale_n_value[[j]]/(lambda_n[[j]] * (df_n[[j]] - d + 1))
+
+    # sample from the calculated posterior for the mean
+    posterior_mean[[j]] <- rmvt(
+      n = num_points,
+      df = df_n[[j]] - d + 1,
+      mu = c(mu_n[[j]]),
+      S = scale_n_value[[j]] / (lambda_n[[j]] * (df_n[[j]] - d + 1))
     )
-    
-    
-    
-    
-    
+
+
     # Generate the desired number of values
-    for(i in 1:num_points){
-      
-      new_variance[[j]][i] <- variance_posterior(df_0, scale_0, lambda_0, mu_0, cluster_data)[1, 1]
-      new_mu[[j]][i] <- mean_posterior(mu_0, variance[[j]], lambda_0, cluster_data)
-      
-      
-      inverse_variance <- rWishart(n = 1,
-                                       df = df_n, 
-                                       sigma = solve(scale_n_value)
+    for (i in 1:num_points) {
+
+      # The sampled_param are the values actually being sampled by our programme
+      sampled_variance[[j]][i] <- variance_posterior(
+        df_0,
+        scale_0,
+        lambda_0,
+        mu_0,
+        cluster_data
+      )[1, 1]
+
+      sampled_mean[[j]][i] <- mean_posterior(
+        mu_0,
+        variance[[j]],
+        lambda_0,
+        cluster_data
       )
-      
-      inverse_variance <- rWishart(1, df_n, solve(scale_n_value)) # solve() inverts
-      
+
+      # The distribution derived based on conjugacy
+      # i.e. what we should be sampling from
+      inverse_variance <- rWishart(1, df_n[[j]], solve(scale_n_value[[j]]))
+
       # For some reason this produces a 3D object, we want 2D I think
       inverse_variance <- matrix(
         inverse_variance,
         dim(inverse_variance)[1],
         dim(inverse_variance)[2]
       )
-      
+
       # Solve for the covariance matrix
-      actual_variance[[j]][i] <- solve(inverse_variance)[1, 1]
-      
+      posterior_variance[[j]][i] <- solve(inverse_variance)[1, 1]
     }
-    mu_data <- data.frame(Sample = new_mu[[j]], Actual = actual_posterior[[j]])
-    plots[[j]] <- ggplot(data = mu_data) +
-      geom_histogram(aes(x = Sample, y = ..count.. / max(..count..)), colour = "black", fill = "steelblue2") +
-      geom_density(aes(x = Actual, y = ..scaled..), colour = "red", size = 0.8) +
+
+    # PLotting data for the mean values
+    mu_data <- data.frame(Sample = sampled_mean[[j]], Actual = posterior_mean[[j]])
+
+    # Mean plot for current cluster
+    plots$mean[[j]] <- ggplot(data = mu_data) +
+      geom_histogram(aes(x = Sample, y = ..count.. / max(..count..)),
+        colour = "black",
+        fill = "steelblue2"
+      ) +
+      geom_density(aes(x = Actual, y = ..scaled..),
+        colour = "red",
+        size = 0.8
+      ) +
       labs(
-        title = "Comparison sampled vs predicted posteriors",
+        title = "MEAN: Comparison sampled vs predicted posteriors",
         subtitle = paste("Cluster", j),
         # caption = "",
-        x = "Value", y = "Density"
+        x = "Value",
+        y = "Density"
+      ) +
+      NULL
+
+    # The data for plotting the variance distributions
+    var_data <- data.frame(
+      Sample = sampled_variance[[j]],
+      Actual = posterior_variance[[j]]
+    )
+
+    plots$variance[[j]] <- ggplot(data = var_data) +
+      geom_histogram(aes(x = Sample, y = ..count.. / max(..count..)),
+        colour = "black",
+        fill = "steelblue2"
+      ) +
+      geom_density(aes(x = Actual, y = ..scaled..),
+        colour = "red",
+        size = 0.8
+      ) +
+      labs(
+        title = "VARIANCE: Comparison sampled vs predicted posteriors",
+        subtitle = paste("Cluster", j),
+        # caption = "",
+        x = "Value",
+        y = "Density"
       ) +
       NULL
   }
@@ -543,4 +607,3 @@ burn
 
 p <- postior_sense_check(data, k, scale_0, mu_0, lambda_0, df_0, num_points = 1000)
 p
-
