@@ -412,9 +412,16 @@ postior_sense_check <- function(data, class_labels, k, scale_0, mu_0, lambda_0, 
   plots$mean <- list()
   plots$variance <- list()
 
+  
+  # data <- as.data.frame(data[, 1])
+  # scale_0 <-   as.matrix(scale_0[1, 1])
+  # mu_0 <- mu_0[1]
+  # 
+  # num_points <- 1000
+  
   # Iterate over clusters
   for (j in 1:k) {
-  # j <- 1
+  
     # Declare the current cluster sample variables
     sampled_mean[[j]] <- rep(0, num_points)
     sampled_variance[[j]] <- matrix(0, ncol = 1, nrow = 1)
@@ -423,12 +430,12 @@ postior_sense_check <- function(data, class_labels, k, scale_0, mu_0, lambda_0, 
     # The various parameters and variables required for the sampling
     cluster_data <- data[class_labels == j, ] # dim(cluster_data)
     
-    if(! is.null(length(cluster_data))){
+    if((! is.null(length(cluster_data))) & !(length(cluster_data) == 0)){
       sample_mean <- mean(cluster_data)
       sample_size <- length(cluster_data)
     } else {
       sample_mean <- 0
-      sample_size <- 0 
+      sample_size <- 0
     }
 
     num_cols <- 1
@@ -472,7 +479,7 @@ postior_sense_check <- function(data, class_labels, k, scale_0, mu_0, lambda_0, 
 
       sampled_mean[[j]][i] <- mean_posterior(
         mu_0,
-        variance[[j]],
+        as.matrix(variance[[j]][1, 1]),
         lambda_0,
         cluster_data
       )
@@ -543,13 +550,13 @@ postior_sense_check <- function(data, class_labels, k, scale_0, mu_0, lambda_0, 
 
 # === Demo =====================================================================
 
-d <- 3
+d <- 4
 N <- 20
 k <- 2
 num_iter <- 1000
 burn <- 0
 
-data <- as.data.frame(matrix(rep(c(rnorm(N / 2, -5, 1), rnorm(N / 2, 5, 1)), d),
+data <- as.data.frame(matrix(rep(c(rnorm(N / 2, -2, 1), rnorm(N / 2, 2, 1)), d),
   nrow = N,
   ncol = d
 )) # hist(data)
@@ -589,6 +596,10 @@ for (qwe in 1:num_iter) {
       mu = mu,
       variance = variance
     )
+    # print(glue("Class label of individual {i} in iteration {j}:\n{class}",
+    #            i = i,
+    #            j = qwe,
+    #            class = class_labels[i]))
   }
   if (qwe > burn) {
     record[, qwe - burn] <- t(class_labels)
@@ -598,8 +609,6 @@ for (qwe in 1:num_iter) {
 sim <- point_similarity(record)
 
 # --- Plotting -----------------------------------------------------------------
-
-
 
 pheatmap(sim) # similarity
 pheatmap(1 - sim) # dissimilarity
