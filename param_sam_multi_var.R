@@ -113,7 +113,8 @@ mean_posterior <- function(mu_0, variance, lambda_0, data) {
   }
   if (inherits(data, "data.frame")) {
     sample_size <- nrow(data)
-
+    num_cols <- ncol(data)  ##PDWK - Added definition of num_cols
+    
     if (sample_size) {
       sample_mean <- data_frame_mean(data)
     } else {
