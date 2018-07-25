@@ -23,6 +23,9 @@ library(RColorBrewer)
 # an alternative colour schema
 library(ghibli) # install.packages("ghibli")
 
+# for inverse Wishart (riwish)
+library(MCMCpack) # install.packages("MCMCpack", dep = T)
+
 # === Functions ================================================================
 
 # --- Generic functions --------------------------------------------------------
@@ -64,8 +67,8 @@ S_n <- function(data, sample_mean, sample_size, num_cols) {
   if (sample_size > 0) {
     for (index in 1:sample_size) {
       sample_covariance <- (sample_covariance
-      + (matrix((data[index, ] - sample_mean))
-        %*% (data[index, ] - sample_mean)
+      + ((data[index, ] - sample_mean)
+        %*% t(data[index, ] - sample_mean)
         )
       )
     }
@@ -90,8 +93,9 @@ scale_n <- function(scale_0,
   scale_n <- (scale_0
   + sample_covariance
     + ((lambda_0 * sample_size) / (lambda_0 + sample_size))
-    * matrix(sample_mean - mu_0) %*% (sample_mean - mu_0)
+    * (sample_mean - mu_0) %*% t(sample_mean - mu_0)
   )
+  
 }
 
 # --- Posterior distributions --------------------------------------------------
@@ -108,26 +112,26 @@ mean_posterior <- function(mu_0, variance, lambda_0, data) {
   # variance: current estimate of variance
   # lambda_0: scaling factor on variance from prior
   # data: dataframe or vector of points
-  if (!(inherits(data, "data.frame") + is.numeric(data))) {
+  if (!(is.data.frame(data) | is.matrix(data))) {
     stop("Data is of the wrong type. ")
   }
-  if (inherits(data, "data.frame")) {
-    sample_size <- nrow(data)
-    num_cols <- ncol(data)  ##PDWK - Added definition of num_cols
-    
-    if (sample_size) {
-      sample_mean <- data_frame_mean(data)
-    } else {
-      sample_mean <- rep(0, num_cols)
-    }
+  # if (inherits(data, "data.frame")) {
+  sample_size <- nrow(data)
+  num_cols <- ncol(data) ## PDWK - Added definition of num_cols
+
+  if (sample_size) {
+    sample_mean <- colMeans(data) # data_frame_mean(data)
   } else {
-    sample_size <- length(data)
-    if (sample_size) {
-      sample_mean <- mean(data)
-    } else {
-      sample_mean <- 0
-    }
+    sample_mean <- rep(0, num_cols)
   }
+  # } else {
+  #   sample_size <- length(data)
+  #   if (sample_size) {
+  #     sample_mean <- mean(data)
+  #   } else {
+  #     sample_mean <- 0
+  #   }
+  # }
 
   lambda_n <- lambda_0 + sample_size
   mu_n <- mean_n(lambda_0, mu_0, sample_size, sample_mean)
@@ -148,39 +152,55 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
   # lambda_0:
   # mu_0: prior estimate of mean for prior distribution of mean
   # data: dataframe or vector of points
-  if (!(inherits(data, "data.frame") + is.numeric(data))) {
+  if (!(is.data.frame(data) | is.matrix(data))) {
     stop("Data is of the wrong type. ")
   }
-  if (inherits(data, "data.frame")) {
-    sample_size <- nrow(data)
-  
-    num_cols <- ncol(data)
-  
-    if (sample_size > 0) {
-      sample_mean <- data_frame_mean(data)
-    } else {
-      sample_mean <- rep(0, num_cols)
-    }
+  # if (is.data.frame(data) | is.matrix(data)) {
+  sample_size <- nrow(data)
+
+  num_cols <- ncol(data)
+
+  if (sample_size > 0) {
+    sample_mean <- colMeans(data)
   } else {
-    sample_size <- length(data)
-    num_cols <- 1
-    if (sample_size > 0) {
-      sample_mean <- mean(data)
-    } else {
-      sample_mean <- 0
-    }
+    sample_mean <- rep(0, num_cols)
   }
+  # }
+
+  # else {
+  #   sample_size <- length(data)
+  #   num_cols <- 1
+  #   if (sample_size > 0) {
+  #     sample_mean <- mean(data)
+  #   } else {
+  #     sample_mean <- 0
+  #   }
+  # }
 
   # Convert data to matrix form for matrix multiplication in later steps
   data <- as.matrix(data)
 
   # Calculate the component parts of the new parameters
+  # sample_covariance <- var(data) * (sample_size - 1) # alternative
   sample_covariance <- S_n(data, sample_mean, sample_size, num_cols)
+  alt_cov <- (var(data) * (sample_size - 1))
+  
+  if(any(is.na(alt_cov))){
+    
+    alt_cov <- matrix(0, ncol = num_cols, nrow = num_cols)
+  }
+  
+  # if(sample_covariance != (var(data) * (sample_size - 1))){
+  if(! isTRUE(all.equal(sample_covariance, alt_cov, tolerance  = 0.001, check.attributes = F))){
+    print(sample_covariance)
+    print((var(data) * (sample_size - 1)))
+    stop("Problem in S_n function")
+  }
 
   # The effective values of the lambda, df and scale given the data
   lambda_n <- lambda_0 + sample_size
   df_n <- df_0 + sample_size
-  
+
   scale_n_value <- scale_n(
     scale_0,
     mu_0,
@@ -189,20 +209,41 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
     sample_size,
     sample_mean
   )
+  
+  
+  alt_scale <- (scale_0
+                + sample_covariance
+                + ((lambda_0 * sample_size) / (lambda_0 + sample_size))
+                   * ((sample_mean - mu_0) %*% t(sample_mean - mu_0))
+                )
+  
+  if(any(is.na(alt_scale))){
+  
+    alt_scale <- scale_0
+  }
+
+  if(! isTRUE(all.equal(scale_n_value, alt_scale, tolerance  = 0.001, check.attributes = F))){
+    print(scale_n_value)
+    print(alt_scale)
+    stop("problem in scale_n")
+  }
 
   # Draw the inverse of variance as a single sample from a Wishart distribution
   # We invert the scale as the first step for moving to an inverse Wishart
-  inverse_variance <- rWishart(1, df_n, solve(scale_n_value)) # solve() inverts
+  # inverse_variance <- rWishart(1, df_n, solve(scale_n_value)) # solve() inverts
+  #
+  # # For some reason this produces a 3D object, we want 2D I think
+  # inverse_variance <- matrix(
+  #   inverse_variance,
+  #   dim(inverse_variance)[1],
+  #   dim(inverse_variance)[2]
+  # )
+  #
+  # # Solve for the covariance matrix
+  # variance <- solve(inverse_variance)
 
-  # For some reason this produces a 3D object, we want 2D I think
-  inverse_variance <- matrix(
-    inverse_variance,
-    dim(inverse_variance)[1],
-    dim(inverse_variance)[2]
-  )
-
-  # Solve for the covariance matrix
-  variance <- solve(inverse_variance)
+  # Alternatively using MCMCpack
+  variance <- riwish(df_n, scale_n_value)
 }
 
 # This function breaks from the above in it handles all classes simultaneously
@@ -235,7 +276,7 @@ class_weight_posterior <- function(concentration_0, class_labels, k) {
   class_weight <- class_weight / sum(class_weight)
 }
 
-sample_class <- function(point, data, k, class_weights,
+sample_class <- function(point, data, k, class_weights, class_labels,
                          q = NULL,
                          mu = NULL,
                          variance = NULL) {
@@ -264,16 +305,21 @@ sample_class <- function(point, data, k, class_weights,
   for (i in 1:k) {
     # Use logs for nicer numbers
     curr_weight <- log(class_weights[i])
-
+    sample_size <- sum(class_labels == i)
+    
     if (!is.null(mu)) {
       # Exponent in likelihood function
       exponent <- -1 / 2 * ((as.matrix(point - mu[[i]]))
       %*% solve(variance[[i]])
         %*% t(as.matrix(point - mu[[i]]))
       )
+      
+      log_likelihood <- - 0.5 * log((det(variance[[i]]))) + exponent # - k * log(pi)
 
       # Weighted log-likelihood for this class
-      prob[i] <- curr_weight + log((det(variance[[i]])^(-0.5))) + exponent
+      # print(curr_weight -(sample_size* 0.5) * log((det(variance[[i]]))) + exponent)
+      prob[i] <- curr_weight + log_likelihood
+      
     } else {
       prob[i] <- curr_weight + logpredictive(q[[i]], point)
     }
@@ -399,7 +445,7 @@ postior_sense_check <- function(data, class_labels, k, scale_0, mu_0, lambda_0, 
   # Declare a bunch of empty variables
   sampled_mean <- list()
   sampled_variance <- list()
-
+  num_cols <- 1
   scale_n_value <- list()
   df_n <- rep(0, k)
   mu_n <- rep(0, k)
@@ -413,16 +459,15 @@ postior_sense_check <- function(data, class_labels, k, scale_0, mu_0, lambda_0, 
   plots$mean <- list()
   plots$variance <- list()
 
-  
   # data <- as.data.frame(data[, 1])
   # scale_0 <-   as.matrix(scale_0[1, 1])
   # mu_0 <- mu_0[1]
-  # 
+  #
   # num_points <- 1000
-  
+
   # Iterate over clusters
   for (j in 1:k) {
-  
+
     # Declare the current cluster sample variables
     sampled_mean[[j]] <- rep(0, num_points)
     sampled_variance[[j]] <- matrix(0, ncol = 1, nrow = 1)
@@ -430,16 +475,14 @@ postior_sense_check <- function(data, class_labels, k, scale_0, mu_0, lambda_0, 
 
     # The various parameters and variables required for the sampling
     cluster_data <- data[class_labels == j, ] # dim(cluster_data)
-    
-    if((! is.null(length(cluster_data))) & !(length(cluster_data) == 0)){
+
+    if ((!is.null(length(cluster_data))) & !(length(cluster_data) == 0)) {
       sample_mean <- mean(cluster_data)
       sample_size <- length(cluster_data)
     } else {
       sample_mean <- 0
       sample_size <- 0
     }
-
-    num_cols <- 1
 
     sample_covariance <- S_n(cluster_data, sample_mean, sample_size, num_cols)
 
@@ -475,14 +518,14 @@ postior_sense_check <- function(data, class_labels, k, scale_0, mu_0, lambda_0, 
         scale_0,
         lambda_0,
         mu_0,
-        cluster_data
+        as.matrix(cluster_data)
       )[1, 1]
 
       sampled_mean[[j]][i] <- mean_posterior(
         mu_0,
         as.matrix(variance[[j]][1, 1]),
         lambda_0,
-        cluster_data
+        as.matrix(cluster_data)
       )
 
       # The distribution derived based on conjugacy
@@ -551,26 +594,33 @@ postior_sense_check <- function(data, class_labels, k, scale_0, mu_0, lambda_0, 
 
 # === Demo =====================================================================
 
-d <- 4
+d <- 3
 N <- 20
 k <- 2
-num_iter <- 1000
+num_iter <- (d^2) * 10
 burn <- 0
 
-data <- as.data.frame(matrix(rep(c(rnorm(N / 2, -2, 1), rnorm(N / 2, 2, 1)), d),
-  nrow = N,
-  ncol = d
-)) # hist(data)
+plotting <- FALSE
+
+set.seed(5)
+data <- matrix(nrow = N, ncol = d)
+for (var_index in 1:d) {
+  data[, var_index] <- c(-2 + 0.1 * rnorm(N / 2), 2 + 0.1 * rnorm(N / 2))
+}
+
+data <- as.data.frame(data)
 
 mu_0 <- rep(0, d)
-df_0 <- d + 1
-scale_0 <- diag(d) # matrix(1)
-alpha_0 <- 0.1
-lambda_0 <- 1
+df_0 <- d + 2
+scale_0 <- diag(d) / (k^(1 / d)) # diag(d) # matrix(1)
+alpha_0 <- 1
+lambda_0 <- 0.01
 concentration_0 <- rep(0.1, k)
 
 variance <- list()
 mu <- list()
+
+# class_labels <- c(rep(1, N/2), rep(2, N/2))
 class_labels <- sample(c(1, 2), N, replace = T)
 class_labels_0 <- class_labels
 
@@ -586,14 +636,21 @@ for (qwe in 1:num_iter) {
   for (j in 1:k) {
     cluster_data <- as.data.frame(data[class_labels == j, ])
 
-    variance[[j]] <- variance_posterior(df_0, scale_0, lambda_0, mu_0, cluster_data)
+    variance[[j]] <- variance_posterior(
+      df_0,
+      scale_0,
+      lambda_0,
+      mu_0,
+      cluster_data
+    )
+
     mu[[j]] <- mean_posterior(mu_0, variance[[j]], lambda_0, cluster_data)
   }
 
   for (i in 1:N) {
     point <- data[i, ]
 
-    class_labels[i] <- sample_class(point, data, k, class_weights,
+    class_labels[i] <- sample_class(point, data, k, class_weights, class_labels,
       mu = mu,
       variance = variance
     )
@@ -610,47 +667,54 @@ for (qwe in 1:num_iter) {
 sim <- point_similarity(record)
 
 # --- Plotting -----------------------------------------------------------------
+if (plotting) {
+  pheatmap(sim) # similarity
+  pheatmap(1 - sim) # dissimilarity
 
-pheatmap(sim) # similarity
-pheatmap(1 - sim) # dissimilarity
-
-# The following plots only work in 1D
-if (d == 1) {
-  # look at the data
-  hist(data[, 1])
-  plot_data <- data.frame(X = data[, 1], Index = 1:N, Class = class_labels)
-  ggplot(plot_data, aes(x = X, y = Index, colour = Class)) + geom_point()
+  # The following plots only work in 1D
+  if (d == 1) {
+    # look at the data
+    hist(data[, 1]) # , breaks = N)
+    plot_data <- data.frame(X = data[, 1], Index = 1:N, Class = class_labels)
+    ggplot(plot_data, aes(x = X, y = Index, colour = Class)) + geom_point()
 
 
-  entropy_data <- data.frame(Index = 1:num_iter, Entropy = entropy_cw)
+    entropy_data <- data.frame(Index = 1:num_iter, Entropy = entropy_cw)
 
-  burn <- entropy_window(entropy_cw, mean_tolerance = 0.01, sd_tolerance = 0.01)
+    burn <- entropy_window(entropy_cw,
+      window_length = min(25, num_iter / 5),
+      mean_tolerance = 0.01,
+      sd_tolerance = 0.01
+    )
 
-  entropy_plot <- ggplot(data = entropy_data, mapping = aes(x = Index, y = Entropy)) +
-    geom_point() +
-    geom_vline(mapping = aes(xintercept = burn, colour = "Burn"), lty = 2) +
-    # geom_smooth(se = F) +
-    ggtitle("Entropy over iterations including recommended burn") +
-    xlab("Iteration") + ylab("Entropy") +
-    scale_color_manual(name = "", values = c(Burn = "red")) +
-    NULL
+    burn <- ifelse(is.null(burn), 1, burn)
 
-  x <- entropy(class_weights)
+    entropy_plot <- ggplot(data = entropy_data, mapping = aes(x = Index, y = Entropy)) +
+      geom_point() +
+      geom_vline(mapping = aes(xintercept = burn, colour = "Burn"), lty = 2) +
+      # geom_smooth(se = F) +
+      ggtitle("Entropy over iterations including recommended burn") +
+      xlab("Iteration") + ylab("Entropy") +
+      scale_color_manual(name = "", values = c(Burn = "red")) +
+      NULL
 
-  entropy_plot
-  burn
+    x <- entropy(class_weights)
 
-  p <- postior_sense_check(as.data.frame(data[, 1]), 
-                           class_labels, 
-                           k,
-                           as.matrix(scale_0[1, 1]),
-                           mu_0[1], 
-                           lambda_0, df_0,
-                           num_points = 1000
-  )
-  p
+    entropy_plot
+    burn
+
+    p <- postior_sense_check(as.data.frame(data[, 1]),
+      class_labels,
+      k,
+      as.matrix(scale_0[1, 1]),
+      mu_0[1],
+      lambda_0,
+      df_0,
+      num_points = 1000
+    )
+    p
+  }
 }
-
 # --- Heatmapping --------------------------------------------------------------
 
 # Trying to add row annotation to pheatmap
@@ -661,7 +725,7 @@ colnames(dissim) <- paste0("Test", 1:N)
 rownames(dissim) <- paste0("Gene", 1:N)
 
 # Example input for annotation_col in pheatmap
-annotation_col <- data.frame(CellType = rep(c("CT1", "CT2"), N/ 2))
+annotation_col <- data.frame(CellType = rep(c("CT1", "CT2"), N / 2))
 rownames(annotation_col) <- paste("Test", 1:N, sep = "")
 
 label_names <- paste("Exp", 1:length(unique(class_labels)), sep = "")
