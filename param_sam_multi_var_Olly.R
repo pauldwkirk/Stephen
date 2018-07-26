@@ -862,7 +862,7 @@ if (plotting) {
   }
 }
 # --- Heatmapping --------------------------------------------------------------
-
+if(FALSE){
 # Trying to add row annotation to pheatmap
 dissim <- 1 - sim
 
@@ -918,7 +918,7 @@ pheatmap(dissim,
   fontsize_col = 6,
   gaps_col = 50 # only has an effect when cluster_cols = F
 )
-
+}
 # === Olly =====================================================================
 # if(FALSE){
 
@@ -972,7 +972,7 @@ class_labels %<>%
 
 class_labels_0 <- sample(1:k, N, replace = T)
 
-sim <- gibbs_sampling(data, k, class_labels)
+sim <- gibbs_sampling(num_data, k, class_labels)
 
 # The auxiliary dataset of primary interest is the Gene Ontology Cellular
 # Compartment namespace. For convenience the dataset has been put in the same
