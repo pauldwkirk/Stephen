@@ -193,7 +193,7 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
   # if(sample_covariance != (var(data) * (sample_size - 1))){
   if(! isTRUE(all.equal(sample_covariance, alt_cov, tolerance  = 0.001, check.attributes = F))){
     print(sample_covariance)
-    print((var(data) * (sample_size - 1)))
+    print((var(data) * (nrow(data) - 1)))
     stop("Problem in S_n function")
   }
 
@@ -209,8 +209,7 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
     sample_size,
     sample_mean
   )
-  
-  
+
   alt_scale <- (scale_0
                 + sample_covariance
                 + ((lambda_0 * sample_size) / (lambda_0 + sample_size))
@@ -243,7 +242,10 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
   # variance <- solve(inverse_variance)
 
   # Alternatively using MCMCpack
+  # print(scale_n_value)
+  # print(solve(scale_n_value))
   variance <- riwish(df_n, scale_n_value)
+  # return(variance)
 }
 
 # This function breaks from the above in it handles all classes simultaneously
@@ -314,7 +316,7 @@ sample_class <- function(point, data, k, class_weights, class_labels,
         %*% t(as.matrix(point - mu[[i]]))
       )
       
-      log_likelihood <- - 0.5 * log((det(variance[[i]]))) + exponent # - k * log(pi)
+      log_likelihood <- - 0.5 * log((det(variance[[i]]))) + exponent
 
       # Weighted log-likelihood for this class
       # print(curr_weight -(sample_size* 0.5) * log((det(variance[[i]]))) + exponent)
@@ -594,11 +596,11 @@ postior_sense_check <- function(data, class_labels, k, scale_0, mu_0, lambda_0, 
 
 # === Demo =====================================================================
 
-d <- 3
-N <- 20
+d <- 6
+N <- d ^ 2 * 10
 k <- 2
-num_iter <- (d^2) * 10
-burn <- 0
+num_iter <- (d^2) * 100
+burn <-  d * 15
 
 plotting <- FALSE
 
@@ -643,8 +645,17 @@ for (qwe in 1:num_iter) {
       mu_0,
       cluster_data
     )
+    
+    alt_var <- var(cluster_data) # + diag(d)
+    
+    # print("Cluster covariance:")
+    # print(alt_var)
 
     mu[[j]] <- mean_posterior(mu_0, variance[[j]], lambda_0, cluster_data)
+    
+    # print(mu[[j]])
+    # print("Cluster mean:")
+    # print(colMeans(cluster_data))
   }
 
   for (i in 1:N) {
