@@ -29,6 +29,7 @@ library(MCMCpack) # install.packages("MCMCpack", dep = T)
 # for Olly's stuff
 require(pRoloc)
 require(pRolocdata)
+# require(Rtsne) # for t-SNE in plot2D
 
 # for %<>%
 library(magrittr)
@@ -187,8 +188,19 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
   data <- as.matrix(data)
 
   # Calculate the component parts of the new parameters
+  
   # sample_covariance <- var(data) * (sample_size - 1) # alternative
+  
+  # print("Components")
+  # print(data)
+  # print(sample_mean)
+  # print(sample_size)
+  # print(num_cols)
+  
+  
   sample_covariance <- S_n(data, sample_mean, sample_size, num_cols)
+  
+  # print("Hit covariance sample")
   
   # alt_cov <- (var(data) * (sample_size - 1))
   # 
@@ -207,6 +219,8 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
   lambda_n <- lambda_0 + sample_size
   df_n <- df_0 + sample_size
 
+  # print(sample_covariance)
+  
   scale_n_value <- scale_n(
     scale_0,
     mu_0,
@@ -216,6 +230,8 @@ variance_posterior <- function(df_0, scale_0, lambda_0, mu_0, data) {
     sample_mean
   )
 
+  # print("alcu scale n")
+  
   # alt_scale <- (scale_0
   # + sample_covariance
   #   + ((lambda_0 * sample_size) / (lambda_0 + sample_size))
@@ -622,10 +638,10 @@ empirical_bayes_initialise <- function(data, mu_0, df_0, scale_0, N, k, d) {
 
   if (is.null(scale_0)) {
     # I think the below line does not work
-    # scale_0 <- diag(colSums((data - colMeans(data))^2) / N) / (k^(1 / d))
-    # if(any(is.na(scale_0))){
+    scale_0 <- diag(colSums((data - colMeans(data))^2) / N) / (k^(1 / d))
+    if(any(is.na(scale_0))){
       scale_0 <- diag(d) / (k^(1 / d))
-    # }
+    }
   }
   parameters$mu_0 <- mu_0
   parameters$df_0 <- df_0
@@ -635,6 +651,8 @@ empirical_bayes_initialise <- function(data, mu_0, df_0, scale_0, N, k, d) {
 }
 
 gibbs_sampling <- function(data, k, class_labels,
+                           d = NULL,
+                           N = NULL,
                            num_iter = NULL,
                            burn = NULL,
                            mu_0 = NULL,
@@ -655,8 +673,14 @@ gibbs_sampling <- function(data, k, class_labels,
   # scale_0: inveserse covariance matrix; if NULL defaults to a diagonal matrix
   # lambda_0: number; prior of shrinkage for mean distribution
   # concentration_0: prior for dirichlet distribution of class weights
-  d <- ncol(data)
-  N <- nrow(data)
+  
+  if(is.null(d)){
+    d <- ncol(data)
+  }
+  
+  if( is.null(N)){
+    N <- nrow(data)
+  }
 
   # Empirical Bayes
   # if (is.null(mu_0)) {
@@ -694,11 +718,21 @@ gibbs_sampling <- function(data, k, class_labels,
   record <- matrix(0, nrow = N, ncol = num_iter - burn)
   entropy_cw <- rep(0, num_iter) # for comparison with across iterations
 
+  # print("Enter loop")
+  
   for (i in 1:num_iter) {
     class_weights <- class_weight_posterior(concentration_0, class_labels, k)
     entropy_cw[i] <- entropy(class_weights)
     for (j in 1:k) {
       cluster_data <- as.data.frame(data[class_labels == j, ])
+
+      # print("Reached variance")
+      
+      # print(scale_0)
+      # print(df_0)
+      # print(mu_0)
+      # print(lambda_0)
+      # print(nrow(cluster_data))
 
       variance[[j]] <- variance_posterior(
         df_0,
@@ -707,6 +741,8 @@ gibbs_sampling <- function(data, k, class_labels,
         mu_0,
         cluster_data
       )
+      
+      # print("Calculated")
 
       mu[[j]] <- mean_posterior(mu_0, variance[[j]], lambda_0, cluster_data)
     }
@@ -729,15 +765,15 @@ gibbs_sampling <- function(data, k, class_labels,
 
 # === Demo =====================================================================
 
-# d <- 4
+plotting <- FALSE
+set.seed(5)
+
+# d <- 3
 # N <- d * 50
 # k <- 2
 # num_iter <- (d^2) * 400
 # burn <- num_iter / 10
 # 
-# plotting <- FALSE
-# 
-# set.seed(5)
 # # data <- mydatatrain
 # data <- matrix(nrow = N, ncol = d)
 # for (var_index in 1:d) {
@@ -762,9 +798,9 @@ gibbs_sampling <- function(data, k, class_labels,
 # 
 # record <- matrix(0, nrow = N, ncol = num_iter - burn)
 # entropy_cw <- rep(0, num_iter)
-# 
-# # --- Gibbs sampling -----------------------------------------------------------
-# 
+
+# --- Gibbs sampling -----------------------------------------------------------
+
 # sim <- gibbs_sampling(data, k, class_labels, num_iter = num_iter)
 
 # for (qwe in 1:num_iter) {
@@ -862,7 +898,7 @@ if (plotting) {
   }
 }
 # --- Heatmapping --------------------------------------------------------------
-if(FALSE){
+if(F){
 # Trying to add row annotation to pheatmap
 dissim <- 1 - sim
 
@@ -922,7 +958,7 @@ pheatmap(dissim,
 # === Olly =====================================================================
 # if(FALSE){
 
-# require(Rtsne) # for t-SNE in plot2D
+
 
 # pRoloc::setStockcol(paste0(pRoloc::getStockcol(), 90)) ## see through colours
 
@@ -955,24 +991,36 @@ mydatalabels <- pRoloc:::subsetAsDataFrame(
   object = HEK293T2011,
   fcol = "markers",
   train = TRUE
-)
+) %>%
+  dplyr::sample_n(100)
 
-class_labels <- as.data.frame(mydatalabels$markers)
+# mydatalabels <- mydatalabels[, c(sample(1:(ncol(mydatalabels) - 1), 5), ncol(mydatalabels))]
+
+class_labels <- data.frame(Class = mydatalabels$markers)
+rownmaes(class_labels) <- rownames(mydatalabels)
 num_data <- mydatalabels %>%
   dplyr::select(- markers)
 
-k <- length(unique(class_labels))
-N <- nrow(mydatalabels)
+k <- length(unique(class_labels$Class))
+N <- nrow(num_data)
+d <- ncol(num_data)
 
-class_labels_key <- data.frame(Class = unique(mydatalabels$markers), Class_num = 1:k)
-
+class_labels_key <- data.frame(Class = unique(mydatalabels$markers)) #, Class_num = 1:k)
+class_labels_key %<>%
+  arrange(Class) %>%
+  dplyr::mutate(Class_key = as.numeric(Class))
 
 class_labels %<>%
   mutate(Class_ind = as.numeric(mydatalabels$markers))
 
 class_labels_0 <- sample(1:k, N, replace = T)
 
-sim <- gibbs_sampling(num_data, k, class_labels)
+
+sim <- gibbs_sampling(num_data, k, class_labels_0,
+                      N = N, 
+                      d = d,
+                      num_iter = 1000
+                      )
 
 # The auxiliary dataset of primary interest is the Gene Ontology Cellular
 # Compartment namespace. For convenience the dataset has been put in the same
@@ -984,3 +1032,67 @@ sim <- gibbs_sampling(num_data, k, class_labels)
 
 pheatmap(sim) # similarity
 pheatmap(1 - sim) # dissimilarity
+
+dissim <- 1 - sim
+
+# Require names to associate data in annotation columns with original data
+colnames(dissim) <- rownames(num_data) #paste0("Test", 1:N)
+rownames(dissim) <- rownames(num_data) #paste0("Gene", 1:N)
+
+# Example input for annotation_col in pheatmap
+annotation_col <- data.frame(CellType = rep(c("CT1", "CT2"), N / 2))
+rownames(annotation_col) <- paste("Test", 1:N, sep = "")
+
+label_names <- paste("Exp", 1:length(unique(class_labels)), sep = "")
+
+# Example input for annotation_row in pheatmap
+annotation_row <- class_labels %>% dplyr::select(Class) # data.frame(Class_label = factor(class_labels,
+                                                  # labels = label_names
+# ))
+
+rownames(annotation_row) <- rownames(dissim)
+
+# Include some NAs
+# NA_rows <- sample(1:N, N / 5)
+# annotation_row[NA_rows, 1] <- NA
+
+# This adds annotation as a row - i.e. a comment on the columns
+pheatmap(dissim,
+         # annotation_col = annotation_col,
+         annotation_row = annotation_row
+)
+
+
+# Colour scheme
+col_pal <- RColorBrewer::brewer.pal(9, "Blues")
+col_pal_alt <- ghibli_palette("MononokeLight", 21, type = "continuous")
+
+# ann_colors <- list(
+#   # Time = c("white", "firebrick"),
+#   Class = c(Chromatin associated = "#C7E9C0", Cytosol = "#00441B")
+# )
+
+# newCols <- ghibli_palette("MononokeLight", length(unique(class_labels$Class)), type = "continuous")
+newCols <- colorRampPalette(grDevices::rainbow(length(unique(class_labels$Class))))
+
+# mycolors <- newCols # if using ghibli
+mycolors <- newCols(length(unique(class_labels$Class)))
+names(mycolors) <- unique(class_labels$Class)
+mycolors <- list(Class = mycolors)
+
+# length(unique(class_labels$Class)
+
+# More full heatmap
+pheatmap(dissim,
+         # annotation_col = annotation_col,
+         annotation_row = annotation_row,
+         annotation_colors = mycolors,
+         main = "Olly 100",
+         cluster_row = T, # adds hierarchical clustering across rows
+         cluster_cols = T, # adds hierarchical clustering across cols
+         color = col_pal, # col_pal_alt,
+         fontsize = 10,
+         fontsize_row = 6,
+         fontsize_col = 6,
+         gaps_col = 50 # only has an effect when cluster_cols = F
+)
