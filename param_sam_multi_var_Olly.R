@@ -29,7 +29,7 @@ library(MCMCpack) # install.packages("MCMCpack", dep = T)
 # for Olly's stuff
 require(pRoloc)
 require(pRolocdata)
-# require(Rtsne) # for t-SNE in plot2D
+require(Rtsne) # for t-SNE in plot2D
 
 # for %<>%
 library(magrittr)
@@ -659,7 +659,8 @@ gibbs_sampling <- function(data, k, class_labels,
                            df_0 = NULL,
                            scale_0 = NULL,
                            lambda_0 = 0.01,
-                           concentration_0 = 0.1) {
+                           concentration_0 = 0.1,
+                           thinning = 25) {
   # Carries out gibbs sampling of data and returns a similarity matrix for points
   
   # data: data being analysed
@@ -673,6 +674,8 @@ gibbs_sampling <- function(data, k, class_labels,
   # scale_0: inveserse covariance matrix; if NULL defaults to a diagonal matrix
   # lambda_0: number; prior of shrinkage for mean distribution
   # concentration_0: prior for dirichlet distribution of class weights
+  # thinning: int; record results whenever the iteration number is a multiple of
+  # this after burn in
   
   if(is.null(d)){
     d <- ncol(data)
@@ -755,7 +758,7 @@ gibbs_sampling <- function(data, k, class_labels,
         variance = variance
       )
     }
-    if (i > burn) {
+    if (i > burn & (i - burn) %% thin == 0) {
       record[, i - burn] <- t(class_labels)
     }
   }
@@ -997,7 +1000,7 @@ mydatalabels <- pRoloc:::subsetAsDataFrame(
 # mydatalabels <- mydatalabels[, c(sample(1:(ncol(mydatalabels) - 1), 5), ncol(mydatalabels))]
 
 class_labels <- data.frame(Class = mydatalabels$markers)
-rownmaes(class_labels) <- rownames(mydatalabels)
+rownames(class_labels) <- rownames(mydatalabels)
 num_data <- mydatalabels %>%
   dplyr::select(- markers)
 
@@ -1019,8 +1022,8 @@ class_labels_0 <- sample(1:k, N, replace = T)
 sim <- gibbs_sampling(num_data, k, class_labels_0,
                       N = N, 
                       d = d,
-                      num_iter = 1000
-                      )
+                      num_iter = 5000
+)
 
 # The auxiliary dataset of primary interest is the Gene Ontology Cellular
 # Compartment namespace. For convenience the dataset has been put in the same
@@ -1083,7 +1086,7 @@ mycolors <- list(Class = mycolors)
 # length(unique(class_labels$Class)
 
 # More full heatmap
-pheatmap(dissim,
+olly_heat <- pheatmap(dissim,
          # annotation_col = annotation_col,
          annotation_row = annotation_row,
          annotation_colors = mycolors,
@@ -1096,3 +1099,65 @@ pheatmap(dissim,
          fontsize_col = 6,
          gaps_col = 50 # only has an effect when cluster_cols = F
 )
+
+# res <- pheatmap(mtcars)
+# mtcars.clust <- cbind(olly_heat,, 
+#                       cluster = cutree(olly_heat$tree_row, 
+#                                        k = k))
+# head(mtcars.clust)
+
+assigned <- cutree(olly_heat$tree_row, 
+       k = k)
+names(assigned)
+as.factor(assigned)
+
+# # Visualisation
+plot2D(object = HEK293T2011, fcol = "markers", method = "PCA") # pca
+plot2D(object = HEK293T2011, fcol = "markers", method = "kpca") # kernal pca
+plot2D(object = HEK293T2011, fcol = "markers", method = "t-SNE") # t-SNE
+
+plot_data <- data.frame(Class_real = class_labels$Class_ind, 
+                        Class_assign = as.factor(assigned)
+                        )
+
+x_da <- cbind(plot_data, num_data)
+names(x_da)
+
+
+
+# 
+# # Silhouette plot
+# library(cluster) # install.packages("cluster", dep = T)
+# library(HSAUR) # install.packages("HSAUR", dep = T)
+# data(pottery)
+# km    <- kmeans(pottery,3)
+# dissE <- daisy(pottery) 
+# dE2   <- dissE^2
+# sk2   <- silhouette(assigned, dissim)
+# plot(sk2)
+
+
+colors = rainbow(length(unique(x_da$Class_real)))
+names(colors) = unique(x_da$Class_real)
+
+## Executing the algorithm on curated data
+tsne <- Rtsne(x_da[,-c(1, 2)], dims = 2, perplexity=30, verbose=TRUE, max_iter = 500)
+exeTimeTsne<- system.time(Rtsne(x_da[,-c(1, 2)], dims = 2, perplexity=30, verbose=TRUE, max_iter = 500))
+
+## Plotting
+par(mfrow = c(1, 2))
+plot(tsne$Y, t='n', main="tsne")
+text(tsne$Y, labels=x_da$Class_assign, col=colors[x_da$Class_assign])
+
+plot(tsne$Y, t='n', main="tsne")
+text(tsne$Y, labels=x_da$Class_real, col=colors[x_da$Class_real])
+par(mfrow = c(1, 1))
+
+plot_data <- data.frame(Class_real = class_labels$Class_ind, 
+                        Class_assign = as.factor(assigned),
+                        tSNE = tsne$Y
+)
+
+ggplot(data = plot_data, mapping = aes(x = tSNE.1, y = tSNE.2)) +
+  geom_point(aes(colour = Class_assign))
+
