@@ -1,5 +1,7 @@
 #!/usr/bin/env Rscript
 
+sourceCpp("sampleRcpp.cpp")
+
 # === Libraries ================================================================
 
 library(expm) # install.packages("expm", dep = T)
@@ -27,9 +29,15 @@ library(ghibli) # install.packages("ghibli")
 library(MCMCpack) # install.packages("MCMCpack", dep = T)
 
 # for Olly's stuff
+## try http:// if https:// URLs are not supported
+# source("https://bioconductor.org/biocLite.R")
+# biocLite("pRoloc")
+# biocLite("pRolocdata")
 require(pRoloc)
 require(pRolocdata)
-require(Rtsne) # for t-SNE in plot2D
+
+# for t-SNE in plot2D
+require(Rtsne) # install.packages("Rtsne", dep = T)
 
 # for %<>%
 library(magrittr)
@@ -370,28 +378,29 @@ point_similarity <- function(cluster_record) {
   # the cluster each point is assigned to in a given iteration
 
   # Record the number of points
-  sample_size <- nrow(cluster_record)
-  num_iter <- ncol(cluster_record)
-
-  # Initialise the similarity matrix
-  similarity_mat <- matrix(0, nrow = sample_size, ncol = sample_size)
-  diag(similarity_mat) <- rep(1, sample_size)
-
-  # symmetric matrix so iterate over i in [1, n - 1] and j in [i + 1, n]
-  for (point in 1:(sample_size - 1)) {
-    for (comparison_point in (point + 1):sample_size) {
-
-      # Divide by num_iter to normalise
-      similarity <- sum(
-        cluster_record[point, ] == cluster_record[comparison_point, ]
-      ) / num_iter
-
-      # Assign value to both points in the matrix (due to symmetry)
-      similarity_mat[point, comparison_point] <- similarity
-      similarity_mat[comparison_point, point] <- similarity
-    }
-  }
-  return(similarity_mat)
+  # sample_size <- nrow(cluster_record)
+  # num_iter <- ncol(cluster_record)
+  # 
+  # # Initialise the similarity matrix
+  # similarity_mat <- matrix(0, nrow = sample_size, ncol = sample_size)
+  # diag(similarity_mat) <- rep(1, sample_size)
+  # 
+  # # symmetric matrix so iterate over i in [1, n - 1] and j in [i + 1, n]
+  # for (point in 1:(sample_size - 1)) {
+  #   for (comparison_point in (point + 1):sample_size) {
+  # 
+  #     # Divide by num_iter to normalise
+  #     similarity <- sum(
+  #       cluster_record[point, ] == cluster_record[comparison_point, ]
+  #     ) / num_iter
+  # 
+  #     # Assign value to both points in the matrix (due to symmetry)
+  #     similarity_mat[point, comparison_point] <- similarity
+  #     similarity_mat[comparison_point, point] <- similarity
+  #   }
+  # }
+  # return(similarity_mat)
+  similarity_mat <- similarity_mat(cluster_record)
 }
 
 
@@ -758,7 +767,7 @@ gibbs_sampling <- function(data, k, class_labels,
         variance = variance
       )
     }
-    if (i > burn & (i - burn) %% thin == 0) {
+    if (i > burn & (i - burn) %% thinning == 0) {
       record[, i - burn] <- t(class_labels)
     }
   }
