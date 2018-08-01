@@ -780,85 +780,84 @@ gibbs_sampling <- function(data, k, class_labels,
 plotting <- FALSE
 set.seed(5)
 
-# d <- 3
-# N <- d * 50
-# k <- 2
-# num_iter <- (d^2) * 400
-# burn <- num_iter / 10
-# 
-# # data <- mydatatrain
-# data <- matrix(nrow = N, ncol = d)
-# for (var_index in 1:d) {
-#   data[, var_index] <- c(-2 + 0.1 * rnorm(N / 2), 2 + 0.1 * rnorm(N / 2))
-# }
-# 
-# data <- as.data.frame(data)
-# 
-# mu_0 <- rep(0, d)
-# df_0 <- d + 2
-# scale_0 <- diag(d) / (k^(1 / d)) # diag(d) # matrix(1)
-# alpha_0 <- 1
-# lambda_0 <- 0.01
-# concentration_0 <- rep(0.1, k)
-# 
-# variance <- list()
-# mu <- list()
-# 
-# # class_labels <- c(rep(1, N/2), rep(2, N/2))
-# class_labels <- sample(c(1, 2), N, replace = T)
-# class_labels_0 <- class_labels
-# 
-# record <- matrix(0, nrow = N, ncol = num_iter - burn)
-# entropy_cw <- rep(0, num_iter)
+d <- 2
+N <- d * 50
+k <- 2
+num_iter <- (d^2) * 400
+burn <- num_iter / 10
+
+# data <- mydatatrain
+data <- matrix(nrow = N, ncol = d)
+for (var_index in 1:d) {
+  data[, var_index] <- c(-2 + 0.1 * rnorm(N / 2), 2 + 0.1 * rnorm(N / 2))
+}
+
+data <- as.data.frame(data)
+
+mu_0 <- rep(0, d)
+df_0 <- d + 2
+scale_0 <- diag(d) / (k^(1 / d)) # diag(d) # matrix(1)
+alpha_0 <- 1
+lambda_0 <- 0.01
+concentration_0 <- rep(0.1, k)
+
+variance <- list()
+mu <- list()
+
+# class_labels <- c(rep(1, N/2), rep(2, N/2))
+class_labels <- sample(c(1, 2), N, replace = T)
+class_labels_0 <- class_labels
+
+record <- matrix(0, nrow = N, ncol = num_iter - burn)
+entropy_cw <- rep(0, num_iter)
 
 # --- Gibbs sampling -----------------------------------------------------------
 
-# sim <- gibbs_sampling(data, k, class_labels, num_iter = num_iter)
+# sim <- point_comparison(num_iter,
+#                         concentration_0,
+#                         class_weights,
+#                         class_labels,
+#                         data,
+#                         df_0,
+#                         k,
+#                         burn,
+#                         thinning)
 
-# for (qwe in 1:num_iter) {
-#   class_weights <- class_weight_posterior(concentration_0, class_labels, k)
-#   entropy_cw[qwe] <- entropy(class_weights)
-#   for (j in 1:k) {
-#     cluster_data <- as.data.frame(data[class_labels == j, ])
-# 
-#     variance[[j]] <- variance_posterior(
-#       df_0,
-#       scale_0,
-#       lambda_0,
-#       mu_0,
-#       cluster_data
-#     )
-# 
-#     alt_var <- var(cluster_data) # + diag(d)
-# 
-#     # print("Cluster covariance:")
-#     # print(alt_var)
-# 
-#     mu[[j]] <- mean_posterior(mu_0, variance[[j]], lambda_0, cluster_data)
-# 
-#     # print(mu[[j]])
-#     # print("Cluster mean:")
-#     # print(colMeans(cluster_data))
-#   }
-# 
-#   for (i in 1:N) {
-#     point <- data[i, ]
-# 
-#     class_labels[i] <- sample_class(point, data, k, class_weights, class_labels,
-#       mu = mu,
-#       variance = variance
-#     )
-#     # print(glue("Class label of individual {i} in iteration {j}:\n{class}",
-#     #            i = i,
-#     #            j = qwe,
-#     #            class = class_labels[i]))
-#   }
-#   if (qwe > burn) {
-#     record[, qwe - burn] <- t(class_labels)
-#   }
-# }
-# 
-# sim <- point_similarity(record)
+sim <- gibbs_sampling(data, k, class_labels, num_iter = num_iter)
+
+for (qwe in 1:num_iter) {
+  class_weights <- class_weight_posterior(concentration_0, class_labels, k)
+  entropy_cw[qwe] <- entropy(class_weights)
+  for (j in 1:k) {
+    cluster_data <- as.data.frame(data[class_labels == j, ])
+
+    variance[[j]] <- variance_posterior(
+      df_0,
+      scale_0,
+      lambda_0,
+      mu_0,
+      cluster_data
+    )
+
+    mu[[j]] <- mean_posterior(mu_0, variance[[j]], lambda_0, cluster_data)
+
+  }
+
+  for (i in 1:N) {
+    point <- data[i, ]
+
+    class_labels[i] <- sample_class(point, data, k, class_weights, class_labels,
+      mu = mu,
+      variance = variance
+    )
+
+  }
+  if (qwe > burn) {
+    record[, qwe - burn] <- t(class_labels)
+  }
+}
+
+sim <- similarity_mat(record)
 
 # --- Plotting -----------------------------------------------------------------
 if (plotting) {
