@@ -248,3 +248,39 @@ float entropy(arma::vec class_weights){
   return entropy_out;
 }
 
+arma::mat variance_posterior(int df_0,
+                             arma::mat scale_0,
+                             float lambda_0,
+                             arma::vec mu_0,
+                             arma::mat data){
+  int sample_size = data.n_rows, num_cols = data.n_cols;
+  arma::vec sample_mean(num_cols);
+  
+  int df_n = df_0 + sample_size;
+  
+  arma::mat scale_n_value(num_cols, num_cols);
+  arma::mat sample_covariance(num_cols, num_cols);
+  arma::mat variance(num_cols, num_cols);
+  
+  if (sample_size > 0){
+    sample_mean = mean(data, 0);  
+  } else{
+    sample_mean.fill(0.0);
+  }
+  
+  sample_covariance = S_n(data, sample_mean, sample_size, num_cols);
+  
+  scale_n_value = scale_n(
+              scale_0,
+              mu_0,
+              lambda_0,
+              sample_covariance,
+              sample_size,
+              sample_mean
+          );
+  
+  variance = arma::iwishrnd(scale_n_value, df_n);
+  
+  return variance;
+   
+} 
