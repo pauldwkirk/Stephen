@@ -1,5 +1,11 @@
-#include <Rcpp.h>
-using namespace Rcpp;
+# include <RcppArmadillo.h>
+// [[Rcpp::depends(RcppArmadillo)]]
+
+using namespace Rcpp ;
+
+//#include <Rcpp.h>
+// using namespace Rcpp;
+// using namespace arma;
 
 // This is a simple example of exporting a C++ function to R. You can
 // source this function into an R session using the Rcpp::sourceCpp 
@@ -10,13 +16,6 @@ using namespace Rcpp;
 //   http://adv-r.had.co.nz/Rcpp.html
 //   http://gallery.rcpp.org/
 //
-
-// [[Rcpp::export]]
-NumericVector timesTwo(NumericVector x) {
-  return x * 2;
-}
-
-
 // You can include R code blocks in C++ files processed with sourceCpp
 // (useful for testing and development). The R code will be automatically 
 // run after the compilation.
@@ -29,7 +28,7 @@ NumericVector timesTwo(NumericVector x) {
 // [[Rcpp::export]]
 float Cpoint_similarity(int point, 
                        int comparison_point,
-                       NumericMatrix cluster_record,
+                       arma::mat cluster_record,
                        int num_iter) {
   float out = 0;
   // int ncol = cluster_record.ncol();
@@ -44,9 +43,10 @@ float Cpoint_similarity(int point,
 }
 
 // [[Rcpp::export]]
-NumericMatrix similarity_mat(NumericMatrix cluster_record){
-  int sample_size = cluster_record.nrow(), num_iter = cluster_record.ncol();
-  NumericMatrix out(sample_size, sample_size);
+arma::mat similarity_mat(arma::mat cluster_record){
+  int sample_size = cluster_record.n_rows;
+  int num_iter = cluster_record.n_cols;
+  arma::mat out(sample_size, sample_size);
   
   for (int point = 0; point < sample_size; point++){ // if not doing diagonal, restrict to sample size - 1
     for (int comparison_point = point; // + 1; 
@@ -63,21 +63,21 @@ NumericMatrix similarity_mat(NumericMatrix cluster_record){
 }
 // 
 // // [[Rcpp::export]]
-// NumericMatrix point_comparison(int num_iter,
-//                                NumericVector concentration_0,
-//                                NumericVector class_labels,
-//                                NumericMatrix data,
+// arma::mat point_comparison(int num_iter,
+//                                arma::vec concentration_0,
+//                                arma::vec class_labels,
+//                                arma::mat data,
 //                                float df_0,
 //                                int k,
 //                                int burn,
 //                                int thinning
 // ){
-//   int N = data.nrow();
-//   NumericMatrix record(N, num_iter - burn);
-//   NumericVector entropy_cw(num_iter);
-//   NumericMatrix sim;
+//   int N = data.n_rows();
+//   arma::mat record(N, num_iter - burn);
+//   arma::vec entropy_cw(num_iter);
+//   arma::mat sim;
 //     
-//   NumericVector class_weights;
+//   arma::vec class_weights;
 // 
 //   Rcpp::List variance;
 //   Rcpp::List mu;
@@ -126,44 +126,125 @@ NumericMatrix similarity_mat(NumericMatrix cluster_record){
 //   sim = similarity_mat(record);
 //   return sim;
 // }
-// 
-// 
-// 
-// 
-// 
-//                                
-// NumericVector class_weight_posterior(float concentration_0,
-//                                      NumericVector class_labels,
-//                                      int k){
-//   NumericVector class_weight(k);
-//   int n = class_labels.size();
-//   int class_count = 0;
-//   float concentration = 0;
-//   float total_class_weight = 0;
-//   for (int i = 0; i < k; i++) {
-//     for (int j = 0; j < n; j++ )
-//     if (class_labels(j) == i) {
-//       class_count++;
-//     }
-//     concentration = concentration_0 + class_count;
-//     class_weight(i) = rgamma(1, concentration, 1)(1);
-//     total_class_weight += class_weight(i);
-//   }
-//   for (int i = 0; i < k; i++) {
-//     class_weight(i) = class_weight(i) / total_class_weight;
-//   }
-//   return class_weight;
-// }
-// 
-// float entropy(NumericVector class_weights){
-//   
-// }
-// 
-// 
-// entropy <- function(class_weights) {
-// # Measure of convergence, entropy from Information theory
-// # Class weights: vector of class_weights (numbers from unit interval)
-//   entropy_components <- class_weights * log(class_weights)
-//   entropy_components[is.nan(entropy_components)] <- 0
-//   entropy <- sum(entropy_components)
-// }
+
+
+
+// [[Rcpp::export]]
+arma::mat S_n(arma::mat data,
+              arma::vec sample_mean,
+              int sample_size,
+              int num_cols){
+  arma::mat sample_covariance(num_cols, num_cols);
+  if(sample_size > 0){
+    for(int i = 0; i < sample_size; i++){
+      arma::vec col_i = data.col(i);
+      sample_covariance = (sample_covariance 
+                             + ((col_i - sample_mean) 
+                                  * arma::trans(col_i - sample_mean)
+                                  )
+                             );
+      
+    }
+  }
+  return sample_covariance;
+}
+
+// [[Rcpp::export]]
+arma::vec mean_n(float lambda_0,
+                     arma::vec mu_0,
+                     int sample_size,
+                     arma::vec sample_mean){
+  arma::vec mu_n;
+  mu_n = ((lambda_0 * mu_0 + sample_size * sample_mean)
+            / (lambda_0 + sample_size));
+  return mu_n;
+}
+
+// [[Rcpp::export]]
+arma::mat scale_n(arma::mat scale_0,
+                      arma::vec mu_0,
+                      float lambda_0,
+                      arma::mat sample_covariance,
+                      int sample_size,
+                      arma::vec sample_mean){
+  arma::mat scale_out;
+  scale_out = (scale_0
+                + sample_covariance
+                + ((lambda_0 * sample_size) / (lambda_0 + sample_size))
+                * (sample_mean - mu_0) * arma::trans(sample_mean - mu_0)
+  ); 
+  return scale_out;
+}
+
+// [[Rcpp::export]]
+arma::mat mvrnormArma(int n,
+                      arma::vec mu,
+                      arma::mat sigma) {
+  int ncols = sigma.n_cols;
+  arma::mat Y = arma::randn(n, ncols);
+  return arma::repmat(mu, 1, n).t() +
+    Y * arma::chol(sigma);
+}
+
+// [[Rcpp::export]]
+arma::vec mean_posterior(arma::vec mu_0,
+                             arma::mat variance,
+                             float lambda_0,
+                             arma::mat data){
+  int ncols = data.n_cols;
+  arma::vec sample_mean(ncols);
+  
+  int sample_size = data.n_rows;
+  if (sample_size > 0){
+    sample_mean = arma::mean(data, 0);
+  }
+  
+  float lambda_n = lambda_0 + sample_size;
+  arma::vec mu_n;
+  mu_n = mean_n(lambda_0, mu_0, sample_size, sample_mean);
+  arma::mat variance_n = variance / lambda_n;
+  
+  arma::vec mu;
+  mu = mvrnormArma(1, mu_n, variance_n);
+  return mu;
+  
+}
+
+// [[Rcpp::export]]
+arma::vec class_weight_posterior(float concentration_0,
+                                 arma::vec class_labels,
+                                 int k){
+  arma::vec class_weight(k);
+  int n = class_labels.n_elem;
+  int class_count = 0;
+  float concentration = 0;
+  float total_class_weight = 0;
+  for (int i = 0; i < k; i++) {
+    for (int j = 0; j < n; j++ )
+      if (class_labels(j) == i) {
+        class_count++;
+      }
+      concentration = concentration_0 + class_count;
+      class_weight(i) = rgamma(1, concentration, 1)(1);
+      total_class_weight += class_weight(i);
+  }
+  for (int i = 0; i < k; i++) {
+    class_weight(i) = class_weight(i) / total_class_weight;
+  }
+  return class_weight;
+}
+
+// [[Rcpp::export]]
+float entropy(arma::vec class_weights){
+  int n = class_weights.n_elem;
+  arma::vec entropy_components(n);
+  entropy_components = class_weights * log(class_weights);
+  if (entropy_components.has_nan()){
+    for(int i = 0; i < n; i++){
+      entropy_components(i) = 0;
+    }
+  }
+  float entropy_out = sum(entropy_components);
+  return entropy_out;
+}
+
