@@ -1,4 +1,5 @@
 # include <RcppArmadillo.h>
+#include <iostream>
 // [[Rcpp::depends(RcppArmadillo)]]
 
 using namespace Rcpp ;
@@ -127,8 +128,6 @@ arma::mat similarity_mat(arma::mat cluster_record){
 //   return sim;
 // }
 
-
-
 // [[Rcpp::export]]
 arma::mat S_n(arma::mat data,
               arma::vec sample_mean,
@@ -248,6 +247,7 @@ float entropy(arma::vec class_weights){
   return entropy_out;
 }
 
+// [[Rcpp::export]]
 arma::mat variance_posterior(int df_0,
                              arma::mat scale_0,
                              float lambda_0,
@@ -263,7 +263,7 @@ arma::mat variance_posterior(int df_0,
   arma::mat variance(num_cols, num_cols);
   
   if (sample_size > 0){
-    sample_mean = mean(data, 0);  
+    sample_mean = mean(data, 0);
   } else{
     sample_mean.fill(0.0);
   }
@@ -284,3 +284,43 @@ arma::mat variance_posterior(int df_0,
   return variance;
    
 } 
+
+// [[Rcpp::export]]
+int sample_class(arma::vec point,
+                   arma::mat data,
+                   int k,
+                   arma::vec class_weights,
+                   arma::vec class_labels,
+                   arma::vec mu,
+                   arma::mat variance){
+  arma::vec prob(k);
+  float curr_weight;
+  float exponent;
+  float log_likelihood;
+  arma::uvec curr_sample;
+  double log_determinant;
+  arma::vec prob_vec(k);
+  float u;
+  int pred;
+  arma::uvec count_probs;
+  
+  for(int i = 0; i < k; i++){
+    curr_weight = log(class_weights(i));
+    curr_sample = find(class_weights == i);
+    
+    exponent = -0.5 * arma::as_scalar((point - mu) 
+                                        * variance.i() 
+                                        * arma::trans(point - mu));
+                                        
+    log_determinant = arma::log_det(variance).real();
+    log_likelihood = -0.5 * log_determinant  + exponent;
+    prob_vec(i) = curr_weight + log_likelihood;
+  } 
+  prob_vec = exp(prob_vec - max(prob_vec));
+  prob_vec = prob_vec / sum(prob_vec);
+  u = arma::randu<float>( );
+  
+  count_probs = arma::find(prob_vec > u);
+  pred = count_probs.n_elem;
+  return pred;
+}
