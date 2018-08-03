@@ -27,11 +27,11 @@ using namespace Rcpp ;
 // */
 
 // [[Rcpp::export]]
-float Cpoint_similarity(int point, 
+double Cpoint_similarity(int point, 
                        int comparison_point,
                        arma::mat cluster_record,
                        int num_iter) {
-  float out = 0;
+  double out = 0.0;
   // int ncol = cluster_record.ncol();
   for (int i = 0; i < num_iter; i++){
     if(cluster_record(point, i) == cluster_record(comparison_point, i)){
@@ -62,71 +62,7 @@ arma::mat similarity_mat(arma::mat cluster_record){
   }
   return out;
 }
-// 
-// // [[Rcpp::export]]
-// arma::mat point_comparison(int num_iter,
-//                                arma::vec concentration_0,
-//                                arma::vec class_labels,
-//                                arma::mat data,
-//                                float df_0,
-//                                int k,
-//                                int burn,
-//                                int thinning
-// ){
-//   int N = data.n_rows();
-//   arma::mat record(N, num_iter - burn);
-//   arma::vec entropy_cw(num_iter);
-//   arma::mat sim;
-//     
-//   arma::vec class_weights;
-// 
-//   Rcpp::List variance;
-//   Rcpp::List mu;
-// 
-//   for(int i = 0; i < num_iter; i++){
-// 
-//     class_weights = class_weight_posterior(concentration_0, class_labels, k);
-//     entropy_cw(i) = entropy(class_weights)
-//     for (int j = 0; j < k; j++) {
-//       cluster_data <- as.data.frame(data[class_labels == j, ])
-//       
-//       
-//       variance[[j]] <- variance_posterior(
-//           df_0,
-//           scale_0,
-//           lambda_0,
-//           mu_0,
-//           cluster_data
-//       )
-//       
-//       mu[[j]] <- mean_posterior(mu_0, variance[[j]], lambda_0, cluster_data)
-//       */
-//     
-//     }
-//     
-//     for (int jj = 0; jj < N; jj++){
-//       /***R
-//       point <- data[jj, ]
-//       
-//       class_labels[jj] <- sample_class(point, data, k, class_weights, class_labels,
-//                                           mu = mu,
-//                                           variance = variance
-//       )
-// 
-//     
-//       */
-//     }
-//     if (i > burn && (i - burn) % thinning == 0) {
-//       /***R
-//       record[, i - burn] <- t(class_labels)
-//       */
-//       
-//     }
-//   }
-//   
-//   sim = similarity_mat(record);
-//   return sim;
-// }
+
 
 // [[Rcpp::export]]
 arma::mat S_n(arma::mat data,
@@ -149,7 +85,7 @@ arma::mat S_n(arma::mat data,
 }
 
 // [[Rcpp::export]]
-arma::vec mean_n(float lambda_0,
+arma::vec mean_n(double lambda_0,
                      arma::vec mu_0,
                      int sample_size,
                      arma::vec sample_mean){
@@ -162,7 +98,7 @@ arma::vec mean_n(float lambda_0,
 // [[Rcpp::export]]
 arma::mat scale_n(arma::mat scale_0,
                       arma::vec mu_0,
-                      float lambda_0,
+                      double lambda_0,
                       arma::mat sample_covariance,
                       int sample_size,
                       arma::vec sample_mean){
@@ -188,7 +124,7 @@ arma::mat mvrnormArma(int n,
 // [[Rcpp::export]]
 arma::vec mean_posterior(arma::vec mu_0,
                              arma::mat variance,
-                             float lambda_0,
+                             double lambda_0,
                              arma::mat data){
   int ncols = data.n_cols;
   arma::vec sample_mean(ncols);
@@ -198,7 +134,7 @@ arma::vec mean_posterior(arma::vec mu_0,
     sample_mean = arma::mean(data, 0);
   }
   
-  float lambda_n = lambda_0 + sample_size;
+  double lambda_n = lambda_0 + sample_size;
   arma::vec mu_n;
   mu_n = mean_n(lambda_0, mu_0, sample_size, sample_mean);
   arma::mat variance_n = variance / lambda_n;
@@ -210,14 +146,14 @@ arma::vec mean_posterior(arma::vec mu_0,
 }
 
 // [[Rcpp::export]]
-arma::vec class_weight_posterior(float concentration_0,
+arma::vec class_weight_posterior(double concentration_0,
                                  arma::vec class_labels,
                                  int k){
   arma::vec class_weight(k);
   int n = class_labels.n_elem;
   int class_count = 0;
-  float concentration = 0;
-  float total_class_weight = 0;
+  double concentration = 0.0;
+  double total_class_weight = 0.0;
   for (int i = 0; i < k; i++) {
     for (int j = 0; j < n; j++ )
       if (class_labels(j) == i) {
@@ -234,7 +170,7 @@ arma::vec class_weight_posterior(float concentration_0,
 }
 
 // [[Rcpp::export]]
-float entropy(arma::vec class_weights){
+double entropy(arma::vec class_weights){
   int n = class_weights.n_elem;
   arma::vec entropy_components(n);
   entropy_components = class_weights * log(class_weights);
@@ -243,14 +179,14 @@ float entropy(arma::vec class_weights){
       entropy_components(i) = 0;
     }
   }
-  float entropy_out = sum(entropy_components);
+  double entropy_out = sum(entropy_components);
   return entropy_out;
 }
 
 // [[Rcpp::export]]
 arma::mat variance_posterior(int df_0,
                              arma::mat scale_0,
-                             float lambda_0,
+                             double lambda_0,
                              arma::vec mu_0,
                              arma::mat data){
   int sample_size = data.n_rows, num_cols = data.n_cols;
@@ -291,36 +227,110 @@ int sample_class(arma::vec point,
                    int k,
                    arma::vec class_weights,
                    arma::vec class_labels,
-                   arma::vec mu,
-                   arma::mat variance){
+                   arma::cube mu,
+                   arma::cube variance){
   arma::vec prob(k);
-  float curr_weight;
-  float exponent;
-  float log_likelihood;
+  double curr_weight;
+  double exponent;
+  double log_likelihood;
   arma::uvec curr_sample;
   double log_determinant;
   arma::vec prob_vec(k);
-  float u;
+  double u;
   int pred;
   arma::uvec count_probs;
-  
+  // arma::mat variance_loc;
+  // arma::vec mu_loc;
   for(int i = 0; i < k; i++){
     curr_weight = log(class_weights(i));
     curr_sample = find(class_weights == i);
     
-    exponent = -0.5 * arma::as_scalar((point - mu) 
-                                        * variance.i() 
-                                        * arma::trans(point - mu));
+    // mu_loc = mu(i);
+    // variance_loc = variance(i);
+    
+    exponent = -0.5 * arma::as_scalar((point - mu.slice(i)) 
+                                        * arma::inv(variance.slice(i))
+                                        * arma::trans(point - mu.slice(i)));
                                         
-    log_determinant = arma::log_det(variance).real();
+    log_determinant = arma::log_det(variance.slice(i)).real();
     log_likelihood = -0.5 * log_determinant  + exponent;
     prob_vec(i) = curr_weight + log_likelihood;
   } 
   prob_vec = exp(prob_vec - max(prob_vec));
   prob_vec = prob_vec / sum(prob_vec);
-  u = arma::randu<float>( );
+  u = arma::randu<double>( );
   
   count_probs = arma::find(prob_vec > u);
   pred = count_probs.n_elem;
   return pred;
 }
+
+ 
+// Rcpp::List
+
+// [[Rcpp::export]
+arma::mat point_comparison(int num_iter,
+                            double concentration_0,
+                            arma::mat scale_0,
+                            arma::vec class_labels,
+                            arma::vec mu_0,
+                            double lambda_0,
+                            arma::mat data,
+                            int df_0,
+                            int k,
+                            int burn,
+                            int thinning){
+    int N, num_cols;
+    N = data.n_rows;
+    num_cols = data.n_cols;
+    arma::mat record(N, num_iter - burn);
+    arma::vec entropy_cw(num_iter);
+    arma::mat sim(N, N);
+    arma::mat cluster_data;
+    arma::vec class_weights(k);
+    
+    arma::cube variance(num_cols, num_cols, k);
+    arma::cube mu(1, num_cols, k);
+    
+    arma::rowvec point;
+    
+    for(int i = 0; i < num_iter; i++){
+      
+      class_weights = class_weight_posterior(concentration_0, class_labels, k);
+      
+      entropy_cw(i) = entropy(class_weights);
+        for (int j = 0; j < k; j++) {
+          cluster_data = data.elem( find(class_labels == j ));
+          
+          variance.slice(j) = variance_posterior(
+              df_0,
+              scale_0,
+              lambda_0,
+              mu_0,
+              cluster_data
+          );
+          
+          mu.slice(j) = mean_posterior(mu_0, variance.slice(j), lambda_0, cluster_data);
+          
+            
+        }
+        
+        for (int jj = 0; jj < N; jj++){
+          point = data.row(jj);
+          
+          class_labels(jj) = sample_class(point, data, k, class_weights, class_labels,
+                                          mu,
+                                          variance
+          );
+  
+        }
+        if (i > burn && (i - burn) % thinning == 0) {
+          
+          record.col(i - burn) = trans(class_labels);
+        }
+    }
+    
+    sim = similarity_mat(record);
+    return sim;
+    // return Rcpp::List::create(Rcpp::named("Similarity") = sim);
+  }
