@@ -363,11 +363,11 @@ gibbs_sampling <- function(data, k, class_labels,
   df_0 <- parameters_0$df_0
   scale_0 <- parameters_0$scale_0
 
-  concentration_0 <- rep(concentration_0, k)
+  # concentration_0 <- rep(concentration_0, k)
   
   sim <- point_comparison(
     num_iter,
-    0.1,
+    concentration_0,
     scale_0,
     class_labels,
     mu_0,
@@ -584,7 +584,8 @@ class_labels_0 <- sample(1:k, N, replace = T)
 sim <- gibbs_sampling(num_data, k, class_labels_0,
   N = N,
   d = d,
-  num_iter = 5000
+  num_iter = 10000,
+  thinning = 100
 )
 
 # The auxiliary dataset of primary interest is the Gene Ontology Cellular

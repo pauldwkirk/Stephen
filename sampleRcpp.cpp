@@ -344,7 +344,7 @@ arma::mat point_comparison(int num_iter,
   // std::cout << "Declaration of record";
   
   arma::Mat<int> record(N, floor((num_iter - burn) / thinning));
-  // record.zeros();
+  record.zeros();
   
   // std::cout << "Record out \n";
   
@@ -387,7 +387,9 @@ arma::mat point_comparison(int num_iter,
       for (int jj = 0; jj < N; jj++){
         point = arma::trans(data.row(jj));
         
-        // std::cout << "Point initialised\n";
+        // std::cout << "Point initialised\n" << "Iteration:\n" << jj << "\n";
+        
+        // std::cout << class_labels(jj) << "\nCheck index \n";
         
         class_labels(jj) = sample_class(point, 
                                         data,
@@ -403,7 +405,7 @@ arma::mat point_comparison(int num_iter,
       // std::cout << "Labels\n" << class_labels << "\n";
       if (i >= burn && (i - burn) % thinning == 0) {
         
-        record.col((i - burn) / 25) = class_labels;
+        record.col((i - burn) / thinning) = class_labels;
       }
   }
   // std::cout << "Record\n" << record << "\n";
