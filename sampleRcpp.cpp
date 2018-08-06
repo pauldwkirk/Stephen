@@ -152,17 +152,21 @@ arma::vec mean_posterior(arma::vec mu_0,
 }
 
 // [[Rcpp::export]]
-arma::vec class_weight_posterior(double concentration_0,
+arma::vec class_weight_posterior(arma::vec concentration_0,
                                  arma::Col<int> class_labels,
                                  int k){
   arma::vec class_weight = arma::zeros<arma::vec>(k);
   
   // std::cout << "\n\n" << class_weight << "\n\n";
+  // 
+  // std::cout << concentration_0;
   
   int n = class_labels.n_elem;
+  
   // std::cout << n ;
+  
   int class_count;
-  double concentration;
+  arma::vec concentration(k);
   double total_class_weight;
 
   for (int i = 1; i < k + 1; i++) {
@@ -173,10 +177,12 @@ arma::vec class_weight_posterior(double concentration_0,
         class_count++;
       }
     }
-      
-    concentration = concentration_0 + class_count;
     
-    class_weight(i - 1) = Rf_rgamma(concentration, 1);
+    // std::cout << "Access concenctration?\n";
+      
+    concentration(i - 1) = arma::as_scalar(concentration_0(i - 1)) + class_count;
+    
+    class_weight(i - 1) = Rf_rgamma(arma::as_scalar(concentration(i - 1)), 1);
     
     // class_weight(i - 1) = arma::as_scalar(rgamma(1, concentration, 1)(1));
     
@@ -184,6 +190,10 @@ arma::vec class_weight_posterior(double concentration_0,
   // for (int i = 0; i < k; i++) {
   //   class_weight(i) = class_weight(i) / total_class_weight;
   // }
+  // std::cout << "Finished loop\n";
+  
+  // std::cout << class_weight;
+  
   total_class_weight = sum(class_weight);
   class_weight = class_weight / total_class_weight;
   return class_weight;
@@ -318,8 +328,8 @@ int sample_class(arma::vec point,
 }
 
 // [[Rcpp::export]]
-arma::mat point_comparison(int num_iter,
-                           double concentration_0,
+Rcpp::List point_comparison(int num_iter,
+                           arma::vec concentration_0,
                            arma::mat scale_0,
                            arma::Col<int> class_labels,
                            arma::vec mu_0,
@@ -343,7 +353,9 @@ arma::mat point_comparison(int num_iter,
   
   // std::cout << "Declaration of record";
   
-  arma::Mat<int> record(N, floor((num_iter - burn) / thinning));
+  int eff_count = floor((num_iter - burn) / thinning);
+  
+  arma::Mat<int> record(N, eff_count);
   record.zeros();
   
   // std::cout << "Record out \n";
@@ -351,8 +363,15 @@ arma::mat point_comparison(int num_iter,
   arma::mat sim(N, N);
   arma::mat cluster_data;
   
-  arma::cube variance(num_cols, num_cols, k);
-  arma::cube mu(num_cols, 1, k);
+  // These are the fields containing cubes recording the posterior mean and 
+  // variance for each class for each recorded iteration
+  arma::field<arma::mat> variance(eff_count, k);
+  arma::field<arma::mat> mu(eff_count, k);
+  
+  // These are the local cubes of posterior mean and variance overwritten each
+  // iteration
+  arma::cube loc_variance(num_cols, num_cols, k);
+  arma::cube loc_mu(num_cols, 1, k);
   
   arma::vec point;
   
@@ -369,7 +388,7 @@ arma::mat point_comparison(int num_iter,
         
         // std::cout << scale_0 << "\n";
         
-        variance.slice(j - 1) = variance_posterior(
+        loc_variance.slice(j - 1) = variance_posterior(
             df_0,
             scale_0,
             lambda_0,
@@ -379,7 +398,7 @@ arma::mat point_comparison(int num_iter,
         
         // std::cout << "\nVariance sampled\n";
         
-        mu.slice(j - 1) = mean_posterior(mu_0, variance.slice(j - 1), lambda_0, cluster_data);
+        loc_mu.slice(j - 1) = mean_posterior(mu_0, loc_variance.slice(j - 1), lambda_0, cluster_data);
         
         // std::cout << "\nAccessed cubes";
       }
@@ -396,8 +415,8 @@ arma::mat point_comparison(int num_iter,
                                         k, 
                                         class_weights, 
                                         class_labels,
-                                        mu,
-                                        variance
+                                        loc_mu,
+                                        loc_variance
         );
         // std::cout << "New label\n" << class_labels(jj) << "\n";
         
@@ -406,6 +425,12 @@ arma::mat point_comparison(int num_iter,
       if (i >= burn && (i - burn) % thinning == 0) {
         
         record.col((i - burn) / thinning) = class_labels;
+        
+        for(int j = 0; j < k; j ++){
+          mu((i - burn) / thinning, j) = loc_mu.slice(j);
+          variance((i - burn) / thinning, j) = loc_variance.slice(j);
+        }
+          
       }
   }
   // std::cout << "Record\n" << record << "\n";
@@ -416,8 +441,13 @@ arma::mat point_comparison(int num_iter,
   // std::cout << "Issue is here";
   sim = similarity_mat(record);
   // std::cout << "Y is here";
-  return sim;
+  // return sim;
+  return List::create(Named("Similarity") = sim,
+                      Named("Mean_posterior") = mu,
+                      Named("Variance_posterior") = variance);
 }
 
-// return Rcpp::List::create(Rcpp::named("Similarity") = sim);
+// return Rcpp::List::create(Rcpp::named("Similarity") = sim,
+//                           Rcpp::named("Mean_posterior") = mu,
+//                             Rcpp::named("Variance_posterior") = Variance);
 

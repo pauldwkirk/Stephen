@@ -298,10 +298,10 @@ empirical_bayes_initialise <- function(data, mu_0, df_0, scale_0, N, k, d) {
 
   if (is.null(scale_0)) {
     # I think the below line does not work
-    # scale_0 <- diag(colSums((data - colMeans(data))^2) / N) / (k^(1 / d))
-    # if (any(is.na(scale_0))) {
+    scale_0 <- diag(colSums((data - mean(data))^2) / N) / (k^(1 / d))
+    if (any(is.na(scale_0))) {
       scale_0 <- diag(d) / (k^(1 / d))
-    # }
+    }
   }
   parameters$mu_0 <- mu_0
   parameters$df_0 <- df_0
@@ -363,7 +363,12 @@ gibbs_sampling <- function(data, k, class_labels,
   df_0 <- parameters_0$df_0
   scale_0 <- parameters_0$scale_0
 
-  # concentration_0 <- rep(concentration_0, k)
+  if(is.null(concentration_0)){
+    concentration_0 <- rep(0.1, k)
+  } else if (length(concentration_0) < k){
+    print(paste0("Creating vector of k repetitions of ", concentration_0))
+    concentration_0 <- rep(concentration_0, k)
+  }
   
   sim <- point_comparison(
     num_iter,
@@ -556,8 +561,7 @@ mydatalabels <- pRoloc:::subsetAsDataFrame(
   object = HEK293T2011,
   fcol = "markers",
   train = TRUE
-) %>%
-  dplyr::sample_n(100)
+)
 
 # mydatalabels <- mydatalabels[, c(sample(1:(ncol(mydatalabels) - 1), 5), ncol(mydatalabels))]
 
@@ -580,13 +584,11 @@ class_labels %<>%
 
 class_labels_0 <- sample(1:k, N, replace = T)
 
-
-sim <- gibbs_sampling(num_data, k, class_labels_0,
-  N = N,
-  d = d,
-  num_iter = 10000,
-  thinning = 100
+mcmc_out <- gibbs_sampling(num_data, k, class_labels_0,
+  num_iter = 10000
 )
+
+sim <- mcmc_out$Similarity
 
 # The auxiliary dataset of primary interest is the Gene Ontology Cellular
 # Compartment namespace. For convenience the dataset has been put in the same
