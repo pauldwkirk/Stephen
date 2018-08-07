@@ -297,7 +297,6 @@ empirical_bayes_initialise <- function(data, mu_0, df_0, scale_0, N, k, d) {
   }
 
   if (is.null(scale_0)) {
-    # I think the below line does not work
     scale_0 <- diag(colSums((data - mean(data))^2) / N) / (k^(1 / d))
     if (any(is.na(scale_0))) {
       scale_0 <- diag(d) / (k^(1 / d))
@@ -345,33 +344,34 @@ gibbs_sampling <- function(data, k, class_labels,
     N <- nrow(data)
   }
 
-  
+
   if (is.null(num_iter)) {
     num_iter <- min((d^2) * 400, 10000)
   }
-  
+
   if (is.null(burn)) {
     burn <- num_iter / 10
   }
-  
-  if (burn > num_iter){
+
+  if (burn > num_iter) {
     stop("Burn in exceeds total iterations. None will be recorded.\nStopping.")
   }
-  
-  if (thinning > (num_iter - burn)){
-    if(thinning > (num_iter - burn) & thinning < 5 * (num_iter - burn)){
+
+  if (thinning > (num_iter - burn)) {
+    if (thinning > (num_iter - burn) & thinning < 5 * (num_iter - burn)) {
       stop("Thinning factor exceeds iterations feasibly recorded. Stopping.")
-    } else if(thinning > 5 * (num_iter - burn) & thinning < 10 * (num_iter - burn)){
+    } else if (thinning > 5 * (num_iter - burn) & thinning < 10 * (num_iter - burn)) {
       stop("Thinning factor relatively large to effective iterations. Stopping algorithm.")
     } else {
-      warning(paste0("Thinning factor relatively large to effective iterations.",
-                     "\nSome samples recorded. Continuing but please check input")
-      )
+      warning(paste0(
+        "Thinning factor relatively large to effective iterations.",
+        "\nSome samples recorded. Continuing but please check input"
+      ))
     }
   }
 
   data <- as.matrix(data)
-  
+
   # Empirical Bayes
   parameters_0 <- empirical_bayes_initialise(data, mu_0, df_0, scale_0, N, k, d)
 
@@ -379,13 +379,13 @@ gibbs_sampling <- function(data, k, class_labels,
   df_0 <- parameters_0$df_0
   scale_0 <- parameters_0$scale_0
 
-  if(is.null(concentration_0)){
+  if (is.null(concentration_0)) {
     concentration_0 <- rep(0.1, k)
-  } else if (length(concentration_0) < k){
-    print(paste0("Creating vector of k repetitions of ", concentration_0))
+  } else if (length(concentration_0) < k) {
+    print(paste0("Creating vector of ", k, " repetitions of ", concentration_0))
     concentration_0 <- rep(concentration_0, k)
   }
-  
+
   sim <- point_comparison(
     num_iter,
     concentration_0,
@@ -401,18 +401,18 @@ gibbs_sampling <- function(data, k, class_labels,
   )
 }
 
-# === Everything ===============================================================
+# === Wrapper ==================================================================
 
-mcmc_out <- function(MS_object, 
+mcmc_out <- function(MS_object,
                      class_labels_0 = NULL,
-                     train = NULL,
-                     num_iter = NULL,
-                     burn = NULL,
                      mu_0 = NULL,
                      df_0 = NULL,
                      scale_0 = NULL,
                      lambda_0 = 0.01,
                      concentration_0 = 0.1,
+                     train = NULL,
+                     num_iter = NULL,
+                     burn = NULL,
                      thinning = 25,
                      heat_plot = TRUE,
                      main = "heatmap_for_similarity",
@@ -421,384 +421,155 @@ mcmc_out <- function(MS_object,
                      fontsize = 10,
                      fontsize_row = 6,
                      fontsize_col = 6,
-                     gaps_col = 50
-){
-  
+                     gaps_col = 50) {
+  # Returns mean, variance and similarity posteriors from Gibbs sampling with
+  # option of pheatmap
+
+  # MS_object: a dataset in the format used by pRolocdata
+  # class_labels_0: optional prior for classes of MS_object if NULL defaults to
+  # a randomly generated set
+  # mu_0: d-vector; prior for mean. If NULL defaults to mean of data
+  # df_0: int; prior for degrees of freedom for inverse Wishart describing the
+  # variance. If NULL, defaults to d + 2
+  # scale_0: inveserse covariance matrix; prior of scale in inverse Wishart
+  # describing the variance.  if NULL defaults to a diagonal matrix
+  # lambda_0: number; prior of shrinkage for mean distribution
+  # concentration_0: prior for dirichlet distribution of class weights
+  # train: instruction to include all data (NULL), labelled data (TRUE) or
+  # unlabelled data (FALSE). Default is NULL.
+  # num_iter: int; number of iterations to sample over
+  # burn: int; number of iterations to record after
+  # thinning: int; record results whenever the iteration number is a multiple of
+  # this after burn in
+  # heat_plot: bool; instructs saving and printing of heatmap of similarity
+  # matrix from Gibbs sampling. Default is TRUE.
+  # main: string; title for heatmap, default is "heatmap_for_similarity"
+  # cluster_row: bool; instructs pheatmap to cluster rows using a tree
+  # cluster_cols: bool; instructs pheatmap to cluster columns using a tree
+  # fontsize: int; size of font in pheatmap
+  # fontsize_row: int; fontsize in rows
+  # fontsize_col: int; fontsize in columns
+  # gaps_col: int; not really present
+
   # Data with labels
   mydata_labels <- pRoloc:::subsetAsDataFrame(
     object = MS_object,
     fcol = "markers",
     train = TRUE
   )
-  
+
   mydata_no_labels <- pRoloc:::subsetAsDataFrame(
     object = MS_object,
     fcol = "markers",
     train = FALSE
   )
-  
+
   mydata_no_labels$markers <- NA
-  
-  if(is.null(train)){
+
+  if (is.null(train)) {
     mydata <- bind_rows(mydata_labels, mydata_no_labels)
-  } else if (train){
+  } else if (train) {
     mydata <- mydata_labels
-  } else{
+  } else {
     train <- mydata_no_labels
   }
-  
-    # Alternative way to get expression marker data
-  # markersubset <- markerMSnSet(object)
-  # mydata <- exprs(markersubset)
-  # X <- exprs(unknownMSnSet(object))
-  
+
   class_labels <- data.frame(Class = mydata$markers)
-  
   classes_present <- unique(class_labels$Class)[!is.na(unique(class_labels$Class))]
-  
+
   rownames(class_labels) <- rownames(mydata)
-  
+
   # Numerical data of interest for clustering
   num_data <- mydata %>%
     dplyr::select(-markers)
-  
+
   # Parameters
   k <- length(classes_present)
   N <- nrow(num_data)
   d <- ncol(num_data)
-  
+
   # Key to transforming from int to class
   class_labels_key <- data.frame(Class = classes_present) # , Class_num = 1:k)
   class_labels_key %<>%
     arrange(Class) %>%
     dplyr::mutate(Class_key = as.numeric(Class))
-  
+
   class_labels %<>%
     mutate(Class_ind = as.numeric(mydata$markers))
-  
+
   # Generate class labels
-  if (is.null(class_labels_0)){
+  if (is.null(class_labels_0)) {
     class_labels_0 <- sample(1:k, N, replace = T)
   }
-  
+
   gibbs <- gibbs_sampling(num_data, k, class_labels_0,
-                          d = d,
-                          N = N,
-                          num_iter = num_iter,
-                          burn = burn,
-                          mu_0 = mu_0,
-                          df_0 = df_0,
-                          scale_0 = scale_0,
-                          lambda_0 = lambda_0,
-                          concentration_0 = concentration_0,
-                          thinning = thinning)
+    d = d,
+    N = N,
+    num_iter = num_iter,
+    burn = burn,
+    mu_0 = mu_0,
+    df_0 = df_0,
+    scale_0 = scale_0,
+    lambda_0 = lambda_0,
+    concentration_0 = concentration_0,
+    thinning = thinning
+  )
+
   print("Gibbs sampling complete")
-  
-  if(heat_plot){
-    
+
+  if (heat_plot) {
+
     # dissimilarity matrix
     dissim <- 1 - gibbs$similarity
-    
+
     # Require names to associate data in annotation columns with original data
     colnames(dissim) <- rownames(num_data)
     rownames(dissim) <- rownames(num_data)
-    
+
     # Example input for annotation_row in pheatmap
     annotation_row <- class_labels %>% dplyr::select(Class)
     rownames(annotation_row) <- rownames(dissim)
-    
+
     # Colour scheme for heatmap
     col_pal <- RColorBrewer::brewer.pal(9, "Blues")
-    
+
     # Annotation colours
     newCols <- colorRampPalette(grDevices::rainbow(length(classes_present)))
     mycolors <- newCols(length(classes_present))
     names(mycolors) <- classes_present
     mycolors <- list(Class = mycolors)
-    
+
     # Heatmap
     heat_map <- pheatmap(dissim,
-                         annotation_row = annotation_row,
-                         annotation_colors = mycolors,
-                         main = main,
-                         cluster_row = cluster_row,
-                         cluster_cols = cluster_cols,
-                         color = col_pal, 
-                         fontsize = fontsize,
-                         fontsize_row = fontsize_row,
-                         fontsize_col = fontsize_col,
-                         gaps_col = gaps_col #,
-                         # silent = TRUE
+      annotation_row = annotation_row,
+      annotation_colors = mycolors,
+      main = main,
+      cluster_row = cluster_row,
+      cluster_cols = cluster_cols,
+      color = col_pal,
+      fontsize = fontsize,
+      fontsize_row = fontsize_row,
+      fontsize_col = fontsize_col,
+      gaps_col = gaps_col
     )
-    
-    return(list(gibbs = gibbs,
-                heatmap = heat_map)
-    )
+
+    return(list(
+      gibbs = gibbs,
+      heatmap = heat_map
+    ))
   }
   return(list(gibbs = gibbs))
-  
 }
 
-
-# === Demo =====================================================================
-
-# --- Heatmapping --------------------------------------------------------------
-if (F) {
-  # Trying to add row annotation to pheatmap
-  dissim <- 1 - sim
-
-  # Require names to associate data in annotation columns with original data
-  colnames(dissim) <- paste0("Test", 1:N)
-  rownames(dissim) <- paste0("Gene", 1:N)
-
-  # Example input for annotation_col in pheatmap
-  annotation_col <- data.frame(CellType = rep(c("CT1", "CT2"), N / 2))
-  rownames(annotation_col) <- paste("Test", 1:N, sep = "")
-
-  label_names <- paste("Exp", 1:length(unique(class_labels)), sep = "")
-
-  # Example input for annotation_row in pheatmap
-  annotation_row <- data.frame(Class_label = factor(class_labels,
-    labels = label_names
-  ))
-
-  rownames(annotation_row) <- rownames(dissim)
-
-  # Include some NAs
-  NA_rows <- sample(1:N, N / 5)
-  annotation_row[NA_rows, 1] <- NA
-
-  # This adds annotation as a row - i.e. a comment on the columns
-  # pheatmap(dissim,
-  #   annotation_col = annotation_col,
-  #   annotation_row = annotation_row
-  # )
-
-
-  # Colour scheme
-  col_pal <- RColorBrewer::brewer.pal(9, "Blues")
-  col_pal_alt <- ghibli_palette("MononokeLight", 21, type = "continuous")
-
-  ann_colors <- list(
-    # Time = c("white", "firebrick"),
-    Class_label = c(Exp1 = "#C7E9C0", Exp2 = "#00441B"),
-    CellType = c(CT1 = "#7570B3", CT2 = "#E7298A")
-  )
-
-  # More full heatmap
-  pheatmap(dissim,
-    annotation_col = annotation_col,
-    annotation_row = annotation_row,
-    annotation_colors = ann_colors,
-    main = "Exmample Heatmap",
-    cluster_row = T, # adds hierarchical clustering across rows
-    cluster_cols = T, # adds hierarchical clustering across cols
-    color = col_pal, # col_pal_alt,
-    fontsize = 6.5,
-    fontsize_row = 6,
-    fontsize_col = 6,
-    gaps_col = 50 # only has an effect when cluster_cols = F
-  )
-}
 # === Olly =====================================================================
-# if(FALSE){
 
 set.seed(5)
 
-# pRoloc::setStockcol(paste0(pRoloc::getStockcol(), 90)) ## see through colours
-
+# MS object
 data("HEK293T2011") # Human Embroyonic Kidney dataset
 
 t1 <- Sys.time()
 stuff <- mcmc_out(HEK293T2011)
 t2 <- Sys.time()
 
-
-t2 - t1
-
-# this function is hidden but is useful for creating a data frame with just the
-# expression data and labels. train = FALSE gives unknowns
-mydatatrain <- pRoloc:::subsetAsDataFrame(
-  object = HEK293T2011,
-  fcol = "markers",
-  train = FALSE
-)
-
-head(mydatatrain)
-
-# train is true gives labelled data.
-mydatalabels <- pRoloc:::subsetAsDataFrame(
-  object = HEK293T2011,
-  fcol = "markers",
-  train = TRUE
-)
-
-mydatatrain$markers <- NA
-
-mydata <- bind_rows(mydatatrain, mydatalabels)
-
-summary(mydata)
-
-class_labels <- data.frame(Class = mydatalabels$markers)
-rownames(class_labels) <- rownames(mydatalabels)
-num_data <- mydatalabels %>%
-  dplyr::select(-markers)
-
-k <- length(unique(class_labels$Class))
-N <- nrow(num_data)
-d <- ncol(num_data)
-
-class_labels_key <- data.frame(Class = unique(mydatalabels$markers)) # , Class_num = 1:k)
-class_labels_key %<>%
-  arrange(Class) %>%
-  dplyr::mutate(Class_key = as.numeric(Class))
-
-class_labels %<>%
-  mutate(Class_ind = as.numeric(mydatalabels$markers))
-
-class_labels_0 <- sample(1:k, N, replace = T)
-
-mcmc_out <- gibbs_sampling(num_data, k, class_labels_0,
-  num_iter = 10000
-)
-
-sim <- mcmc_out$similarity
-
-# The auxiliary dataset of primary interest is the Gene Ontology Cellular
-# Compartment namespace. For convenience the dataset has been put in the same
-# format as the MS data.
-# data("HEK293T2011goCC") # get goCC data
-# head(exprs(HEK293T2011goCC)[,1:10]) # let looks at it
-
-# }
-
-pheatmap(sim) # similarity
-pheatmap(1 - sim) # dissimilarity
-
-dissim <- 1 - sim
-
-# Require names to associate data in annotation columns with original data
-colnames(dissim) <- rownames(num_data) # paste0("Test", 1:N)
-rownames(dissim) <- rownames(num_data) # paste0("Gene", 1:N)
-
-# Example input for annotation_col in pheatmap
-annotation_col <- data.frame(CellType = rep(c("CT1", "CT2"), N / 2))
-rownames(annotation_col) <- paste("Test", 1:N, sep = "")
-
-label_names <- paste("Exp", 1:length(unique(class_labels)), sep = "")
-
-# Example input for annotation_row in pheatmap
-annotation_row <- class_labels %>% dplyr::select(Class) # data.frame(Class_label = factor(class_labels,
-# labels = label_names
-# ))
-
-rownames(annotation_row) <- rownames(dissim)
-
-# Include some NAs
-# NA_rows <- sample(1:N, N / 5)
-# annotation_row[NA_rows, 1] <- NA
-
-# This adds annotation as a row - i.e. a comment on the columns
-pheatmap(dissim,
-  # annotation_col = annotation_col,
-  annotation_row = annotation_row
-)
-
-
-# Colour scheme
-col_pal <- RColorBrewer::brewer.pal(9, "Blues")
-col_pal_alt <- ghibli_palette("MononokeLight", 21, type = "continuous")
-
-# ann_colors <- list(
-#   # Time = c("white", "firebrick"),
-#   Class = c(Chromatin associated = "#C7E9C0", Cytosol = "#00441B")
-# )
-
-# newCols <- ghibli_palette("MononokeLight", length(unique(class_labels$Class)), type = "continuous")
-newCols <- colorRampPalette(grDevices::rainbow(length(unique(class_labels$Class))))
-
-# mycolors <- newCols # if using ghibli
-mycolors <- newCols(length(unique(class_labels$Class)))
-names(mycolors) <- unique(class_labels$Class)
-mycolors <- list(Class = mycolors)
-
-# length(unique(class_labels$Class)
-
-# More full heatmap
-olly_heat <- pheatmap(dissim,
-  # annotation_col = annotation_col,
-  annotation_row = annotation_row,
-  annotation_colors = mycolors,
-  main = "Olly 100",
-  cluster_row = T, # adds hierarchical clustering across rows
-  cluster_cols = T, # adds hierarchical clustering across cols
-  color = col_pal, # col_pal_alt,
-  fontsize = 10,
-  fontsize_row = 6,
-  fontsize_col = 6,
-  gaps_col = 50 # only has an effect when cluster_cols = F
-)
-
-# res <- pheatmap(mtcars)
-# mtcars.clust <- cbind(olly_heat,,
-#                       cluster = cutree(olly_heat$tree_row,
-#                                        k = k))
-# head(mtcars.clust)
-
-assigned <- cutree(olly_heat$tree_row,
-  k = k
-)
-names(assigned)
-as.factor(assigned)
-
-# # Visualisation
-plot2D(object = HEK293T2011, fcol = "markers", method = "PCA") # pca
-plot2D(object = HEK293T2011, fcol = "markers", method = "kpca") # kernal pca
-plot2D(object = HEK293T2011, fcol = "markers", method = "t-SNE") # t-SNE
-
-plot_data <- data.frame(
-  Class_real = class_labels$Class_ind,
-  Class_assign = as.factor(assigned)
-)
-
-x_da <- cbind(plot_data, num_data)
-names(x_da)
-
-
-
-#
-# # Silhouette plot
-# library(cluster) # install.packages("cluster", dep = T)
-# library(HSAUR) # install.packages("HSAUR", dep = T)
-# data(pottery)
-# km    <- kmeans(pottery,3)
-# dissE <- daisy(pottery)
-# dE2   <- dissE^2
-# sk2   <- silhouette(assigned, dissim)
-# plot(sk2)
-
-
-colors <- rainbow(length(unique(x_da$Class_real)))
-names(colors) <- unique(x_da$Class_real)
-
-## Executing the algorithm on curated data
-tsne <- Rtsne(x_da[, -c(1, 2)], dims = 2, perplexity = 30, verbose = TRUE, max_iter = 500)
-exeTimeTsne <- system.time(Rtsne(x_da[, -c(1, 2)], dims = 2, perplexity = 30, verbose = TRUE, max_iter = 500))
-
-## Plotting
-par(mfrow = c(1, 2))
-plot(tsne$Y, t = "n", main = "tsne")
-text(tsne$Y, labels = x_da$Class_assign, col = colors[x_da$Class_assign])
-
-plot(tsne$Y, t = "n", main = "tsne")
-text(tsne$Y, labels = x_da$Class_real, col = colors[x_da$Class_real])
-par(mfrow = c(1, 1))
-
-plot_data <- data.frame(
-  Class_real = class_labels$Class_ind,
-  Class_assign = as.factor(assigned),
-  tSNE = tsne$Y
-)
-
-ggplot(data = plot_data, mapping = aes(x = tSNE.1, y = tSNE.2)) +
-  geom_point(aes(colour = Class_assign))
+t2 - t1 # how long does it take
