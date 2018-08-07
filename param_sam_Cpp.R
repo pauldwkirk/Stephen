@@ -406,7 +406,7 @@ gibbs_sampling <- function(data, k, class_labels,
 mcmc_out <- function(MS_object, 
                      train = TRUE,
                      num_iter = NULL,
-                     burn = 0,
+                     burn = NULL,
                      mu_0 = NULL,
                      df_0 = NULL,
                      scale_0 = NULL,
@@ -423,7 +423,7 @@ mcmc_out <- function(MS_object,
                      gaps_col = 50
 ){
   mydatalabels <- pRoloc:::subsetAsDataFrame(
-    object = HEK293T2011,
+    object = MS_object,
     fcol = "markers",
     train = train
   )
@@ -579,10 +579,6 @@ set.seed(5)
 data("HEK293T2011") # Human Embroyonic Kidney dataset
 
 stuff <- mcmc_out(HEK293T2011)
-
-
-
-stuff$heatmap
 
 # this function is hidden but is useful for creating a data frame with just the
 # expression data and labels. train = FALSE gives unknowns

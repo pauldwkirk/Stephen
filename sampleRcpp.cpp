@@ -365,9 +365,12 @@ Rcpp::List point_comparison(int num_iter,
   
   // These are the fields containing cubes recording the posterior mean and 
   // variance for each class for each recorded iteration
-  arma::field<arma::mat> variance(eff_count, k);
-  arma::field<arma::mat> mu(eff_count, k);
+  // arma::field<arma::mat> variance(eff_count, k);
+  // arma::field<arma::mat> mu(eff_count, k);
   
+  ListMatrix variance(eff_count, k);
+  ListMatrix mu(eff_count, k);
+
   // These are the local cubes of posterior mean and variance overwritten each
   // iteration
   arma::cube loc_variance(num_cols, num_cols, k);
@@ -427,6 +430,7 @@ Rcpp::List point_comparison(int num_iter,
         record.col((i - burn) / thinning) = class_labels;
         
         for(int j = 0; j < k; j ++){
+          // variance
           mu((i - burn) / thinning, j) = loc_mu.slice(j);
           variance((i - burn) / thinning, j) = loc_variance.slice(j);
         }
@@ -438,6 +442,8 @@ Rcpp::List point_comparison(int num_iter,
   //   std::cout << record.col(i) << "\n";
   // }
   
+  
+    
   // std::cout << "Issue is here";
   sim = similarity_mat(record);
   // std::cout << "Y is here";
