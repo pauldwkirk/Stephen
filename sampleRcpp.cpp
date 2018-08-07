@@ -353,8 +353,12 @@ Rcpp::List point_comparison(int num_iter,
   
   // std::cout << "Declaration of record";
   
-  int eff_count = floor((num_iter - burn) / thinning);
+  int eff_count = ceil((double)(num_iter - burn) / (double)thinning);
+  int record_ind;
   
+  // std::cout << eff_count << "\n";
+  // std::cout << (double)(num_iter - burn) / (double)thinning << "\n";
+
   arma::Mat<int> record(N, eff_count);
   record.zeros();
   
@@ -377,7 +381,7 @@ Rcpp::List point_comparison(int num_iter,
   arma::cube loc_mu(num_cols, 1, k);
   
   arma::vec point;
-  
+
   // std::cout << "Output sentence";
   
   for(int i = 0; i < num_iter; i++){
@@ -425,14 +429,18 @@ Rcpp::List point_comparison(int num_iter,
         
       }
       // std::cout << "Labels\n" << class_labels << "\n";
+      
       if (i >= burn && (i - burn) % thinning == 0) {
-        
-        record.col((i - burn) / thinning) = class_labels;
-        
+        // std::cout << i << "\n";
+        // std::cout << (i - burn) / thinning << "\n";
+        record_ind = (i - burn) / thinning;
+        record.col(record_ind) = class_labels;
+        // std::cout << "record accessed" << "\n";
         for(int j = 0; j < k; j ++){
           // variance
-          mu((i - burn) / thinning, j) = loc_mu.slice(j);
-          variance((i - burn) / thinning, j) = loc_variance.slice(j);
+          // std::cout << "Recording params" << j << "\n";
+          mu(record_ind, j) = loc_mu.slice(j);
+          variance(record_ind, j) = loc_variance.slice(j);
         }
           
       }
@@ -450,10 +458,6 @@ Rcpp::List point_comparison(int num_iter,
   // return sim;
   return List::create(Named("similarity") = sim,
                       Named("mean_posterior") = mu,
-                      Named("variance_posterior") = variance);
+                      Named("variance_posterior") = variance,
+                      Named("entropy") = entropy_cw);
 }
-
-// return Rcpp::List::create(Rcpp::named("Similarity") = sim,
-//                           Rcpp::named("Mean_posterior") = mu,
-//                             Rcpp::named("Variance_posterior") = Variance);
-

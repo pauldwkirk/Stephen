@@ -382,7 +382,10 @@ gibbs_sampling <- function(data, k, class_labels,
   if (is.null(concentration_0)) {
     concentration_0 <- rep(0.1, k)
   } else if (length(concentration_0) < k) {
-    print(paste0("Creating vector of ", k, " repetitions of ", concentration_0))
+    print(paste0(
+      "Creating vector of ", k, " repetitions of ", concentration_0,
+      " for concentration prior."
+    ))
     concentration_0 <- rep(concentration_0, k)
   }
 
@@ -421,7 +424,11 @@ mcmc_out <- function(MS_object,
                      fontsize = 10,
                      fontsize_row = 6,
                      fontsize_col = 6,
-                     gaps_col = 50) {
+                     gaps_col = 50,
+                     entropy_plot = TRUE,
+                     window_length = min(25, num_iter / 5),
+                     mean_tolerance = 0.0005,
+                     sd_tolerance = 0.0005) {
   # Returns mean, variance and similarity posteriors from Gibbs sampling with
   # option of pheatmap
 
@@ -552,10 +559,49 @@ mcmc_out <- function(MS_object,
       fontsize_col = fontsize_col,
       gaps_col = gaps_col
     )
+  }
+  if (entropy_plot) {
+    entropy_data <- data.frame(Index = 1:num_iter, Entropy = gibbs$entropy)
 
+    rec_burn <- entropy_window(gibbs$entropy,
+      window_length = window_length,
+      mean_tolerance = mean_tolerance,
+      sd_tolerance = sd_tolerance
+    )
+
+    # Check if instantly ok
+    rec_burn <- ifelse(is.null(rec_burn), 1, rec_burn)
+
+    entropy_scatter <- ggplot(data = entropy_data, mapping = aes(x = Index, y = Entropy)) +
+      geom_point() +
+      geom_vline(mapping = aes(xintercept = rec_burn, colour = "Reccomended"), lty = 2) +
+      geom_vline(mapping = aes(xintercept = burn, colour = "Implemented"), lty = 4) +
+      ggtitle("Entropy over iterations including recommended and implemented burn") +
+      xlab("Iteration") + ylab("Entropy") +
+      scale_color_manual(name = "", values = c(
+        Reccomended = "red",
+        Implemented = "blue"
+      ))
+  }
+  if (heat_plot & entropy_plot) {
+    return(list(
+      gibbs = gibbs,
+      heat_map = heat_map,
+      entropy_plot = entropy_scatter,
+      rec_burn = rec_burn
+    ))
+  }
+  if (heat_plot) {
     return(list(
       gibbs = gibbs,
       heatmap = heat_map
+    ))
+  }
+  if (entropy_plot) {
+    return(list(
+      gibbs = gibbs,
+      entropy_plot = entropy_scatter,
+      rec_burn = rec_burn
     ))
   }
   return(list(gibbs = gibbs))
@@ -568,8 +614,10 @@ set.seed(5)
 # MS object
 data("HEK293T2011") # Human Embroyonic Kidney dataset
 
+num_iter <- 200
+
 t1 <- Sys.time()
-stuff <- mcmc_out(HEK293T2011)
+stuff <- mcmc_out(HEK293T2011, num_iter = num_iter)
 t2 <- Sys.time()
 
 t2 - t1 # how long does it take
