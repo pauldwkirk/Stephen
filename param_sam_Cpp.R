@@ -404,7 +404,8 @@ gibbs_sampling <- function(data, k, class_labels,
 # === Everything ===============================================================
 
 mcmc_out <- function(MS_object, 
-                     train = TRUE,
+                     class_labels_0 = NULL,
+                     train = NULL,
                      num_iter = NULL,
                      burn = NULL,
                      mu_0 = NULL,
@@ -422,33 +423,63 @@ mcmc_out <- function(MS_object,
                      fontsize_col = 6,
                      gaps_col = 50
 ){
-  mydatalabels <- pRoloc:::subsetAsDataFrame(
+  
+  # Data with labels
+  mydata_labels <- pRoloc:::subsetAsDataFrame(
     object = MS_object,
     fcol = "markers",
-    train = train
+    train = TRUE
   )
   
-  class_labels <- data.frame(Class = mydatalabels$markers)
+  mydata_no_labels <- pRoloc:::subsetAsDataFrame(
+    object = MS_object,
+    fcol = "markers",
+    train = FALSE
+  )
   
-  rownames(class_labels) <- rownames(mydatalabels)
+  mydata_no_labels$markers <- NA
+  
+  if(is.null(train)){
+    mydata <- bind_rows(mydata_labels, mydata_no_labels)
+  } else if (train){
+    mydata <- mydata_labels
+  } else{
+    train <- mydata_no_labels
+  }
+  
+    # Alternative way to get expression marker data
+  # markersubset <- markerMSnSet(object)
+  # mydata <- exprs(markersubset)
+  # X <- exprs(unknownMSnSet(object))
+  
+  class_labels <- data.frame(Class = mydata$markers)
+  
+  classes_present <- unique(class_labels$Class)[!is.na(unique(class_labels$Class))]
+  
+  rownames(class_labels) <- rownames(mydata)
   
   # Numerical data of interest for clustering
-  num_data <- mydatalabels %>%
+  num_data <- mydata %>%
     dplyr::select(-markers)
   
   # Parameters
-  k <- length(unique(class_labels$Class))
+  k <- length(classes_present)
   N <- nrow(num_data)
   d <- ncol(num_data)
   
   # Key to transforming from int to class
-  class_labels_key <- data.frame(Class = unique(mydatalabels$markers)) # , Class_num = 1:k)
+  class_labels_key <- data.frame(Class = classes_present) # , Class_num = 1:k)
   class_labels_key %<>%
     arrange(Class) %>%
     dplyr::mutate(Class_key = as.numeric(Class))
   
   class_labels %<>%
-    mutate(Class_ind = as.numeric(mydatalabels$markers))
+    mutate(Class_ind = as.numeric(mydata$markers))
+  
+  # Generate class labels
+  if (is.null(class_labels_0)){
+    class_labels_0 <- sample(1:k, N, replace = T)
+  }
   
   gibbs <- gibbs_sampling(num_data, k, class_labels_0,
                           d = d,
@@ -480,9 +511,9 @@ mcmc_out <- function(MS_object,
     col_pal <- RColorBrewer::brewer.pal(9, "Blues")
     
     # Annotation colours
-    newCols <- colorRampPalette(grDevices::rainbow(length(unique(class_labels$Class))))
-    mycolors <- newCols(length(unique(class_labels$Class)))
-    names(mycolors) <- unique(class_labels$Class)
+    newCols <- colorRampPalette(grDevices::rainbow(length(classes_present)))
+    mycolors <- newCols(length(classes_present))
+    names(mycolors) <- classes_present
     mycolors <- list(Class = mycolors)
     
     # Heatmap
@@ -578,7 +609,12 @@ set.seed(5)
 
 data("HEK293T2011") # Human Embroyonic Kidney dataset
 
+t1 <- Sys.time()
 stuff <- mcmc_out(HEK293T2011)
+t2 <- Sys.time()
+
+
+t2 - t1
 
 # this function is hidden but is useful for creating a data frame with just the
 # expression data and labels. train = FALSE gives unknowns
@@ -588,6 +624,8 @@ mydatatrain <- pRoloc:::subsetAsDataFrame(
   train = FALSE
 )
 
+head(mydatatrain)
+
 # train is true gives labelled data.
 mydatalabels <- pRoloc:::subsetAsDataFrame(
   object = HEK293T2011,
@@ -595,9 +633,11 @@ mydatalabels <- pRoloc:::subsetAsDataFrame(
   train = TRUE
 )
 
+mydatatrain$markers <- NA
 
+mydata <- bind_rows(mydatatrain, mydatalabels)
 
-
+summary(mydata)
 
 class_labels <- data.frame(Class = mydatalabels$markers)
 rownames(class_labels) <- rownames(mydatalabels)
