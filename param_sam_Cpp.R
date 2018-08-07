@@ -347,11 +347,27 @@ gibbs_sampling <- function(data, k, class_labels,
 
   
   if (is.null(num_iter)) {
-    num_iter <- (d^2) * 400
+    num_iter <- min((d^2) * 400, 10000)
   }
   
   if (is.null(burn)) {
     burn <- num_iter / 10
+  }
+  
+  if (burn > num_iter){
+    stop("Burn in exceeds total iterations. None will be recorded.\nStopping.")
+  }
+  
+  if (thinning > (num_iter - burn)){
+    if(thinning > (num_iter - burn) & thinning < 5 * (num_iter - burn)){
+      stop("Thinning factor exceeds iterations feasibly recorded. Stopping.")
+    } else if(thinning > 5 * (num_iter - burn) & thinning < 10 * (num_iter - burn)){
+      stop("Thinning factor relatively large to effective iterations. Stopping algorithm.")
+    } else {
+      warning(paste0("Thinning factor relatively large to effective iterations.",
+                     "\nSome samples recorded. Continuing but please check input")
+      )
+    }
   }
 
   data <- as.matrix(data)
@@ -385,90 +401,118 @@ gibbs_sampling <- function(data, k, class_labels,
   )
 }
 
+# === Everything ===============================================================
+
+mcmc_out <- function(MS_object, 
+                     train = TRUE,
+                     num_iter = NULL,
+                     burn = 0,
+                     mu_0 = NULL,
+                     df_0 = NULL,
+                     scale_0 = NULL,
+                     lambda_0 = 0.01,
+                     concentration_0 = 0.1,
+                     thinning = 25,
+                     heat_plot = TRUE,
+                     main = "heatmap_for_similarity",
+                     cluster_row = T,
+                     cluster_cols = T,
+                     fontsize = 10,
+                     fontsize_row = 6,
+                     fontsize_col = 6,
+                     gaps_col = 50
+){
+  mydatalabels <- pRoloc:::subsetAsDataFrame(
+    object = HEK293T2011,
+    fcol = "markers",
+    train = train
+  )
+  
+  class_labels <- data.frame(Class = mydatalabels$markers)
+  
+  rownames(class_labels) <- rownames(mydatalabels)
+  
+  # Numerical data of interest for clustering
+  num_data <- mydatalabels %>%
+    dplyr::select(-markers)
+  
+  # Parameters
+  k <- length(unique(class_labels$Class))
+  N <- nrow(num_data)
+  d <- ncol(num_data)
+  
+  # Key to transforming from int to class
+  class_labels_key <- data.frame(Class = unique(mydatalabels$markers)) # , Class_num = 1:k)
+  class_labels_key %<>%
+    arrange(Class) %>%
+    dplyr::mutate(Class_key = as.numeric(Class))
+  
+  class_labels %<>%
+    mutate(Class_ind = as.numeric(mydatalabels$markers))
+  
+  gibbs <- gibbs_sampling(num_data, k, class_labels_0,
+                          d = d,
+                          N = N,
+                          num_iter = num_iter,
+                          burn = burn,
+                          mu_0 = mu_0,
+                          df_0 = df_0,
+                          scale_0 = scale_0,
+                          lambda_0 = lambda_0,
+                          concentration_0 = concentration_0,
+                          thinning = thinning)
+  print("Gibbs sampling complete")
+  
+  if(heat_plot){
+    
+    # dissimilarity matrix
+    dissim <- 1 - gibbs$similarity
+    
+    # Require names to associate data in annotation columns with original data
+    colnames(dissim) <- rownames(num_data)
+    rownames(dissim) <- rownames(num_data)
+    
+    # Example input for annotation_row in pheatmap
+    annotation_row <- class_labels %>% dplyr::select(Class)
+    rownames(annotation_row) <- rownames(dissim)
+    
+    # Colour scheme for heatmap
+    col_pal <- RColorBrewer::brewer.pal(9, "Blues")
+    
+    # Annotation colours
+    newCols <- colorRampPalette(grDevices::rainbow(length(unique(class_labels$Class))))
+    mycolors <- newCols(length(unique(class_labels$Class)))
+    names(mycolors) <- unique(class_labels$Class)
+    mycolors <- list(Class = mycolors)
+    
+    # Heatmap
+    heat_map <- pheatmap(dissim,
+                         annotation_row = annotation_row,
+                         annotation_colors = mycolors,
+                         main = main,
+                         cluster_row = cluster_row,
+                         cluster_cols = cluster_cols,
+                         color = col_pal, 
+                         fontsize = fontsize,
+                         fontsize_row = fontsize_row,
+                         fontsize_col = fontsize_col,
+                         gaps_col = gaps_col #,
+                         # silent = TRUE
+    )
+    
+    return(list(gibbs = gibbs,
+                heatmap = heat_map)
+    )
+  }
+  return(list(gibbs = gibbs))
+  
+}
+
+
 # === Demo =====================================================================
 
-plotting <- FALSE
-set.seed(5)
-
-d <- 6
-N <- d * 50
-k <- 2
-num_iter <- (d^2) * 400
-burn <- num_iter / 10
-
-# data <- mydatatrain
-data <- matrix(nrow = N, ncol = d)
-for (var_index in 1:d) {
-  data[, var_index] <- c(-2 + 0.1 * rnorm(N / 2), 2 + 0.1 * rnorm(N / 2))
-}
-
-data <- as.data.frame(data)
-
-mu_0 <- rep(0, d)
-df_0 <- d + 2
-scale_0 <- diag(d) / (k^(1 / d))
-alpha_0 <- 1
-lambda_0 <- 0.01
-concentration_0 <- 0.1
-
-class_labels <- sample(c(1, 2), N, replace = T)
-class_labels_0 <- class_labels
-
-# --- Gibbs sampling -----------------------------------------------------------
-
-sim <- gibbs_sampling(data, k, class_labels)
-
-# --- Plotting -----------------------------------------------------------------
-if (plotting) {
-  pheatmap(sim) # similarity
-  pheatmap(1 - sim) # dissimilarity
-
-  # The following plots only work in 1D
-  if (d == 1) {
-    # look at the data
-    hist(data[, 1]) # , breaks = N)
-    plot_data <- data.frame(X = data[, 1], Index = 1:N, Class = class_labels)
-    ggplot(plot_data, aes(x = X, y = Index, colour = Class)) + geom_point()
-
-
-    entropy_data <- data.frame(Index = 1:num_iter, Entropy = entropy_cw)
-
-    burn <- entropy_window(entropy_cw,
-      window_length = min(25, num_iter / 5),
-      mean_tolerance = 0.01,
-      sd_tolerance = 0.01
-    )
-
-    burn <- ifelse(is.null(burn), 1, burn)
-
-    entropy_plot <- ggplot(data = entropy_data, mapping = aes(x = Index, y = Entropy)) +
-      geom_point() +
-      geom_vline(mapping = aes(xintercept = burn, colour = "Burn"), lty = 2) +
-      # geom_smooth(se = F) +
-      ggtitle("Entropy over iterations including recommended burn") +
-      xlab("Iteration") + ylab("Entropy") +
-      scale_color_manual(name = "", values = c(Burn = "red")) +
-      NULL
-
-    x <- entropy(class_weights)
-
-    entropy_plot
-    burn
-
-    p <- postior_sense_check(as.data.frame(data[, 1]),
-      class_labels,
-      k,
-      as.matrix(scale_0[1, 1]),
-      mu_0[1],
-      lambda_0,
-      df_0,
-      num_points = 1000
-    )
-    p
-  }
-}
 # --- Heatmapping --------------------------------------------------------------
-if (T) {
+if (F) {
   # Trying to add row annotation to pheatmap
   dissim <- 1 - sim
 
@@ -528,25 +572,17 @@ if (T) {
 # === Olly =====================================================================
 # if(FALSE){
 
-
+set.seed(5)
 
 # pRoloc::setStockcol(paste0(pRoloc::getStockcol(), 90)) ## see through colours
 
 data("HEK293T2011") # Human Embroyonic Kidney dataset
 
-# head(exprs(HEK293T2011)) # proteins as rows, MS channels as columns
-#
-# head(fData(HEK293T2011)) # qualitative protein information
-# pData(HEK293T2011) # information about Density-gradient fractions
-# getMarkerClasses(HEK293T2011) # we have 12 classes
-#
-# head(fData(HEK293T2011)$markers) # labels and unknowns
-# markerMSnSet(HEK293T2011) # This creates a new MSnSet with just the markers
-#
-# # Visualisation
-# plot2D(object = HEK293T2011, fcol = "markers", method = "PCA") # pca
-# plot2D(object = HEK293T2011, fcol = "markers", method = "kpca") # kernal pca
-# plot2D(object = HEK293T2011, fcol = "markers", method = "t-SNE") # t-SNE
+stuff <- mcmc_out(HEK293T2011)
+
+
+
+stuff$heatmap
 
 # this function is hidden but is useful for creating a data frame with just the
 # expression data and labels. train = FALSE gives unknowns
@@ -563,7 +599,9 @@ mydatalabels <- pRoloc:::subsetAsDataFrame(
   train = TRUE
 )
 
-# mydatalabels <- mydatalabels[, c(sample(1:(ncol(mydatalabels) - 1), 5), ncol(mydatalabels))]
+
+
+
 
 class_labels <- data.frame(Class = mydatalabels$markers)
 rownames(class_labels) <- rownames(mydatalabels)
@@ -588,7 +626,7 @@ mcmc_out <- gibbs_sampling(num_data, k, class_labels_0,
   num_iter = 10000
 )
 
-sim <- mcmc_out$Similarity
+sim <- mcmc_out$similarity
 
 # The auxiliary dataset of primary interest is the Gene Ontology Cellular
 # Compartment namespace. For convenience the dataset has been put in the same

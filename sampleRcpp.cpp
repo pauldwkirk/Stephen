@@ -442,9 +442,9 @@ Rcpp::List point_comparison(int num_iter,
   sim = similarity_mat(record);
   // std::cout << "Y is here";
   // return sim;
-  return List::create(Named("Similarity") = sim,
-                      Named("Mean_posterior") = mu,
-                      Named("Variance_posterior") = variance);
+  return List::create(Named("similarity") = sim,
+                      Named("mean_posterior") = mu,
+                      Named("variance_posterior") = variance);
 }
 
 // return Rcpp::List::create(Rcpp::named("Similarity") = sim,
