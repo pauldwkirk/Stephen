@@ -207,7 +207,7 @@ double entropy(arma::vec class_weights){
 
   
   for(int i = 0; i < n; i++){
-    entropy_components(i) = class_weights(i) * log(class_weights(i));
+    entropy_components(i) = - class_weights(i) * log(class_weights(i));
     if (entropy_components.has_nan()){
       entropy_components(i) = 0;
     }

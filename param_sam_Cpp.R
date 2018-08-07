@@ -350,7 +350,7 @@ gibbs_sampling <- function(data, k, class_labels,
   }
 
   if (is.null(burn)) {
-    burn <- num_iter / 10
+    burn <- floor(num_iter / 10)
   }
 
   if (burn > num_iter) {
@@ -509,6 +509,8 @@ mcmc_out <- function(MS_object,
     class_labels_0 <- sample(1:k, N, replace = T)
   }
 
+  burn <- ifelse(is.null(burn), floor(num_iter / 10), burn)
+
   gibbs <- gibbs_sampling(num_data, k, class_labels_0,
     d = d,
     N = N,
@@ -572,6 +574,7 @@ mcmc_out <- function(MS_object,
     # Check if instantly ok
     rec_burn <- ifelse(is.null(rec_burn), 1, rec_burn)
 
+
     entropy_scatter <- ggplot(data = entropy_data, mapping = aes(x = Index, y = Entropy)) +
       geom_point() +
       geom_vline(mapping = aes(xintercept = rec_burn, colour = "Reccomended"), lty = 2) +
@@ -617,7 +620,10 @@ data("HEK293T2011") # Human Embroyonic Kidney dataset
 num_iter <- 200
 
 t1 <- Sys.time()
-stuff <- mcmc_out(HEK293T2011, num_iter = num_iter)
+stuff <- mcmc_out(HEK293T2011, num_iter = num_iter, heat_plot = F)
 t2 <- Sys.time()
+
+stuff$entropy_plot
+stuff$rec_burn
 
 t2 - t1 # how long does it take
