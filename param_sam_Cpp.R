@@ -531,7 +531,30 @@ mcmc_out <- function(MS_object,
     }
   }
 
-  burn <- ifelse(is.null(burn), floor(num_iter / 10), burn)
+  if (is.null(num_iter)) {
+    num_iter <- min((d^2) * 1000 / sqrt(N), 10000)
+  }
+
+  if (is.null(burn)) {
+    burn <- floor(num_iter / 10)
+  }
+
+  if (burn > num_iter) {
+    stop("Burn in exceeds total iterations. None will be recorded.\nStopping.")
+  }
+
+  if (thinning > (num_iter - burn)) {
+    if (thinning > (num_iter - burn) & thinning < 5 * (num_iter - burn)) {
+      stop("Thinning factor exceeds iterations feasibly recorded. Stopping.")
+    } else if (thinning > 5 * (num_iter - burn) & thinning < 10 * (num_iter - burn)) {
+      stop("Thinning factor relatively large to effective iterations. Stopping algorithm.")
+    } else {
+      warning(paste0(
+        "Thinning factor relatively large to effective iterations.",
+        "\nSome samples recorded. Continuing but please check input"
+      ))
+    }
+  }
 
   gibbs <- gibbs_sampling(num_data, k, class_labels_0, fix_vec,
     d = d,
@@ -616,7 +639,7 @@ mcmc_out <- function(MS_object,
       geom_vline(mapping = aes(xintercept = burn, colour = "Implemented"), lty = 4) +
       ggtitle("Entropy over iterations including recommended and implemented burn") +
       xlab("Iteration") + ylab("Entropy") +
-      scale_color_manual(name = "", values = c(
+      scale_color_manual(name = "Burn", values = c(
         Reccomended = "red",
         Implemented = "blue"
       ))
@@ -651,19 +674,6 @@ set.seed(5)
 
 # MS object
 data("HEK293T2011") # Human Embroyonic Kidney dataset
-
-# markersubset <- markerMSnSet(HEK293T2011)
-#
-# nk <- tabulate(fData(markersubset)[, "markers"])
-# D <- ncol(HEK293T2011)
-# nu0 <- D + 2
-# nuk <- nu0 + nk
-#
-# degf <- nuk - D + 1 #degrees freedom
-#
-# getMarkerClasses(HEK293T2011)
-
-num_iter <- 1000
 
 t1 <- Sys.time()
 stuff <- mcmc_out(HEK293T2011)
