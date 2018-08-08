@@ -332,6 +332,7 @@ Rcpp::List point_comparison(int num_iter,
                            arma::vec concentration_0,
                            arma::mat scale_0,
                            arma::Col<int> class_labels,
+                           std::vector<bool> fix_vec,
                            arma::vec mu_0,
                            double lambda_0,
                            arma::mat data,
@@ -411,22 +412,23 @@ Rcpp::List point_comparison(int num_iter,
       }
       
       for (int jj = 0; jj < N; jj++){
-        point = arma::trans(data.row(jj));
-        
-        // std::cout << "Point initialised\n" << "Iteration:\n" << jj << "\n";
-        
-        // std::cout << class_labels(jj) << "\nCheck index \n";
-        
-        class_labels(jj) = sample_class(point, 
-                                        data,
-                                        k, 
-                                        class_weights, 
-                                        class_labels,
-                                        loc_mu,
-                                        loc_variance
-        );
-        // std::cout << "New label\n" << class_labels(jj) << "\n";
-        
+        if(! fix_vec[jj]){ // if the current point is not fixed, sample its class
+          point = arma::trans(data.row(jj));
+          
+          // std::cout << "Point initialised\n" << "Iteration:\n" << jj << "\n";
+          
+          // std::cout << class_labels(jj) << "\nCheck index \n";
+          
+          class_labels(jj) = sample_class(point, 
+                                          data,
+                                          k, 
+                                          class_weights, 
+                                          class_labels,
+                                          loc_mu,
+                                          loc_variance
+          );
+          // std::cout << "New label\n" << class_labels(jj) << "\n";
+        }
       }
       // std::cout << "Labels\n" << class_labels << "\n";
       

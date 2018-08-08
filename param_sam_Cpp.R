@@ -309,7 +309,7 @@ empirical_bayes_initialise <- function(data, mu_0, df_0, scale_0, N, k, d) {
   return(parameters)
 }
 
-gibbs_sampling <- function(data, k, class_labels,
+gibbs_sampling <- function(data, k, class_labels, fix_vec,
                            d = NULL,
                            N = NULL,
                            num_iter = NULL,
@@ -346,7 +346,7 @@ gibbs_sampling <- function(data, k, class_labels,
 
 
   if (is.null(num_iter)) {
-    num_iter <- min((d^2) * 400, 10000)
+    num_iter <- min((d^2) * 1000 / sqrt(N), 10000)
   }
 
   if (is.null(burn)) {
@@ -394,6 +394,7 @@ gibbs_sampling <- function(data, k, class_labels,
     concentration_0,
     scale_0,
     class_labels,
+    fix_vec,
     mu_0,
     lambda_0,
     data,
@@ -465,24 +466,34 @@ mcmc_out <- function(MS_object,
     train = TRUE
   )
 
+  fixed <- rep(TRUE, nrow(mydata_labels))
+
   mydata_no_labels <- pRoloc:::subsetAsDataFrame(
     object = MS_object,
     fcol = "markers",
     train = FALSE
   )
 
+  not_fixed <- rep(FALSE, nrow(mydata_no_labels))
+
+  nk <- tabulate(fData(markerMSnSet(HEK293T2011))[, "markers"])
+
   mydata_no_labels$markers <- NA
 
   if (is.null(train)) {
     mydata <- bind_rows(mydata_labels, mydata_no_labels)
-  } else if (train) {
+    fix_vec <- c(fixed, not_fixed)
+  } else if (isTRUE(train)) {
     mydata <- mydata_labels
+    fix_vec <- fixed
   } else {
-    train <- mydata_no_labels
+    mydata <- mydata_no_labels
+    fix_vec <- not_fixed
   }
 
   class_labels <- data.frame(Class = mydata$markers)
-  classes_present <- unique(class_labels$Class)[!is.na(unique(class_labels$Class))]
+
+  classes_present <- unique(fData(markerMSnSet(HEK293T2011))[, "markers"])
 
   rownames(class_labels) <- rownames(mydata)
 
@@ -506,12 +517,23 @@ mcmc_out <- function(MS_object,
 
   # Generate class labels
   if (is.null(class_labels_0)) {
-    class_labels_0 <- sample(1:k, N, replace = T)
+    class_weights <- nk / sum(nk)
+    if (is.null(train)) {
+      fixed_labels <- as.numeric(fData(markerMSnSet(HEK293T2011))[, "markers"])
+      class_labels_0 <- c(fixed_labels, sample(1:k, nrow(mydata_no_labels),
+        replace = T,
+        prob = class_weights
+      ))
+    } else if (isTRUE(train)) {
+      class_labels_0 <- as.numeric(fData(markerMSnSet(HEK293T2011))[, "markers"])
+    } else {
+      class_labels_0 <- sample(1:k, N, replace = T, prob = class_weights)
+    }
   }
 
   burn <- ifelse(is.null(burn), floor(num_iter / 10), burn)
 
-  gibbs <- gibbs_sampling(num_data, k, class_labels_0,
+  gibbs <- gibbs_sampling(num_data, k, class_labels_0, fix_vec,
     d = d,
     N = N,
     num_iter = num_iter,
@@ -549,18 +571,31 @@ mcmc_out <- function(MS_object,
     mycolors <- list(Class = mycolors)
 
     # Heatmap
-    heat_map <- pheatmap(dissim,
-      annotation_row = annotation_row,
-      annotation_colors = mycolors,
-      main = main,
-      cluster_row = cluster_row,
-      cluster_cols = cluster_cols,
-      color = col_pal,
-      fontsize = fontsize,
-      fontsize_row = fontsize_row,
-      fontsize_col = fontsize_col,
-      gaps_col = gaps_col
-    )
+    if (is.null(train) | isTRUE(train)) {
+      heat_map <- pheatmap(dissim,
+        annotation_row = annotation_row,
+        annotation_colors = mycolors,
+        main = main,
+        cluster_row = cluster_row,
+        cluster_cols = cluster_cols,
+        color = col_pal,
+        fontsize = fontsize,
+        fontsize_row = fontsize_row,
+        fontsize_col = fontsize_col,
+        gaps_col = gaps_col
+      )
+    } else {
+      heat_map <- pheatmap(dissim,
+        main = main,
+        cluster_row = cluster_row,
+        cluster_cols = cluster_cols,
+        color = col_pal,
+        fontsize = fontsize,
+        fontsize_row = fontsize_row,
+        fontsize_col = fontsize_col,
+        gaps_col = gaps_col
+      )
+    }
   }
   if (entropy_plot) {
     entropy_data <- data.frame(Index = 1:num_iter, Entropy = gibbs$entropy)
@@ -617,13 +652,23 @@ set.seed(5)
 # MS object
 data("HEK293T2011") # Human Embroyonic Kidney dataset
 
-num_iter <- 200
+# markersubset <- markerMSnSet(HEK293T2011)
+#
+# nk <- tabulate(fData(markersubset)[, "markers"])
+# D <- ncol(HEK293T2011)
+# nu0 <- D + 2
+# nuk <- nu0 + nk
+#
+# degf <- nuk - D + 1 #degrees freedom
+#
+# getMarkerClasses(HEK293T2011)
+
+num_iter <- 1000
 
 t1 <- Sys.time()
-stuff <- mcmc_out(HEK293T2011, num_iter = num_iter, heat_plot = F)
+stuff <- mcmc_out(HEK293T2011)
 t2 <- Sys.time()
 
-stuff$entropy_plot
-stuff$rec_burn
-
 t2 - t1 # how long does it take
+
+stuff$entropy_plot
