@@ -43,7 +43,7 @@ library(magrittr)
 # to access C++ files
 library(Rcpp)
 
-sourceCpp("sampleRcpp.cpp")
+sourceCpp("sampleRcpp_tcomparison.cpp")
 
 # === Functions ================================================================
 
@@ -695,4 +695,5 @@ t2 <- Sys.time()
 
 t2 - t1 # how long does it take
 
+# To plot the entropy over iterations
 stuff$entropy_plot

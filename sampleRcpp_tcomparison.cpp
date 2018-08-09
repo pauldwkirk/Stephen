@@ -286,19 +286,19 @@ arma::mat variance_posterior(int df_0,
   
 } 
 
-int sample_class(arma::vec point,
-                 arma::mat data,
-                 int k,
-                 arma::vec class_weights,
-                 arma::Col<int> class_labels,
-                 arma::cube mu,
-                 arma::cube variance,
-                 bool outlier = false,
-                 arma::vec global_mean = arma::zeros<arma::vec>(1),
-                 arma::mat global_variance = arma::zeros<arma::mat>(1, 1),
-                 double t_df = 4.0){
+arma::vec sample_class(arma::vec point,
+                       arma::mat data,
+                       int k,
+                       arma::vec class_weights,
+                       arma::Col<int> class_labels,
+                       arma::cube mu,
+                       arma::cube variance,
+                       bool outlier = false,
+                       arma::vec global_mean = arma::zeros<arma::vec>(1),
+                       arma::mat global_variance = arma::zeros<arma::mat>(1, 1),
+                       double t_df = 4.0){
   
-  arma::vec prob(k);
+  // arma::vec prob(k);
   double curr_weight;
   double exponent;
   double log_likelihood;
@@ -307,8 +307,7 @@ int sample_class(arma::vec point,
   
   double log_det;
   arma::vec prob_vec(k);
-  double u;
-  int pred;
+
   arma::uvec count_probs;
   
   int d = data.n_cols;;
@@ -362,8 +361,14 @@ int sample_class(arma::vec point,
   prob_vec = exp(prob_vec - max(prob_vec));
   prob_vec = prob_vec / sum(prob_vec);
   
-  // std::cout << prob_vec << "\n\n";
+  return prob_vec;
+}
+
+int select_class(arma::vec prob_vec){
   
+  // std::cout << prob_vec << "\n\n";
+  double u;
+  int pred;
   u = arma::randu<double>( );
   
   // count_probs = arma::find(prob_vec > u);
@@ -417,6 +422,9 @@ Rcpp::List point_comparison(int num_iter,
   
   arma::vec entropy_cw(num_iter);
   
+  // arma::vec class_probs(k);
+
+  
   // std::cout << "Declaration of record";
   
   int eff_count = ceil((double)(num_iter - burn) / (double)thinning);
@@ -455,7 +463,12 @@ Rcpp::List point_comparison(int num_iter,
   
   arma::vec point;
   
-  // std::cout << "Output sentence";
+  // std::cout << "Faux output sentence\n";
+  
+  arma::field<arma::vec> curr_class_probs(N, 1);
+  List class_probs(eff_count);
+  
+  // std::cout << "Output sentence\n";
   
   for(int i = 0; i < num_iter; i++){
     // std::cout << "Output sentence";
@@ -485,29 +498,33 @@ Rcpp::List point_comparison(int num_iter,
     }
     
     for (int jj = 0; jj < N; jj++){
-      if(! fix_vec[jj]){ // if the current point is not fixed, sample its class
+       // if the current point is not fixed, sample its class
         point = arma::trans(data.row(jj));
         
         // std::cout << "Point initialised\n" << "Iteration:\n" << jj << "\n";
         
         // std::cout << class_labels(jj) << "\nCheck index \n";
         
-        class_labels(jj) = sample_class(point, 
-                     data,
-                     k, 
-                     class_weights, 
-                     class_labels,
-                     loc_mu,
-                     loc_variance,
-                     outlier = outlier,
-                     global_mean = global_mean,
-                     global_variance = global_variance,
-                     t_df = t_df
+        curr_class_probs(jj, 0) = sample_class(point, 
+                                            data,
+                                            k, 
+                                            class_weights, 
+                                            class_labels,
+                                            loc_mu,
+                                            loc_variance,
+                                            outlier,
+                                            global_mean,
+                                            global_variance,
+                                            t_df
         );
+      
+      if(! fix_vec[jj]){
+        class_labels(jj) = select_class(curr_class_probs(jj, 0));
         // std::cout << "New label\n" << class_labels(jj) << "\n";
       }
     }
     // std::cout << "Labels\n" << class_labels << "\n";
+    // std::cout << "Generic message\n" << "\n";
     
     if (i >= burn && (i - burn) % thinning == 0) {
       // std::cout << i << "\n";
@@ -515,6 +532,8 @@ Rcpp::List point_comparison(int num_iter,
       record_ind = (i - burn) / thinning;
       record.col(record_ind) = class_labels;
       // std::cout << "record accessed" << "\n";
+      class_probs(record_ind) = curr_class_probs;
+      
       for(int j = 0; j < k; j ++){
         // variance
         // std::cout << "Recording params" << j << "\n";
@@ -538,5 +557,6 @@ Rcpp::List point_comparison(int num_iter,
   return List::create(Named("similarity") = sim,
                       Named("mean_posterior") = mu,
                       Named("variance_posterior") = variance,
-                      Named("entropy") = entropy_cw);
+                      Named("entropy") = entropy_cw,
+                      Named("class_prob") = class_probs);
 }
