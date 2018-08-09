@@ -686,9 +686,12 @@ data("HEK293T2011") # Human Embroyonic Kidney dataset
 t1 <- Sys.time()
 
 stuff <- mcmc_out(HEK293T2011,
-  num_iter = 1000,
+  num_iter = 100,
+  burn = 10,
+  thinning = 10,
   outlier = TRUE,
-  main = "Gene clustering by organelle"
+  heat_plot = FALSE
+  # main = "Gene clustering by organelle"
 )
 
 t2 <- Sys.time()
@@ -697,3 +700,17 @@ t2 - t1 # how long does it take
 
 # To plot the entropy over iterations
 stuff$entropy_plot
+str(stuff$gibbs$class_prob)
+
+str(stuff$gibbs$class_record)
+
+
+y <- stuff$gibbs$class_record
+
+hist(y[1000,])
+
+z <- apply(y, 2, factor)
+qwert <- as.data.frame(z)
+summary(qwert)
+
+

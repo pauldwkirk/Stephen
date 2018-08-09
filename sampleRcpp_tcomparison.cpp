@@ -465,8 +465,13 @@ Rcpp::List point_comparison(int num_iter,
   
   // std::cout << "Faux output sentence\n";
   
-  arma::field<arma::vec> curr_class_probs(N, 1);
-  List class_probs(eff_count);
+  
+  // arma::field<arma::vec> curr_class_probs(N, 1);
+  // arma::mat curr_class_probs(N, k);
+  // List class_probs(eff_count);
+  
+  arma::cube class_probs(eff_count, k, N);
+  arma::vec curr_class_probs(k);
   
   // std::cout << "Output sentence\n";
   
@@ -505,21 +510,29 @@ Rcpp::List point_comparison(int num_iter,
         
         // std::cout << class_labels(jj) << "\nCheck index \n";
         
-        curr_class_probs(jj, 0) = sample_class(point, 
-                                            data,
-                                            k, 
-                                            class_weights, 
-                                            class_labels,
-                                            loc_mu,
-                                            loc_variance,
-                                            outlier,
-                                            global_mean,
-                                            global_variance,
-                                            t_df
+        curr_class_probs = sample_class(point, 
+                                        data,
+                                        k, 
+                                        class_weights, 
+                                        class_labels,
+                                        loc_mu,
+                                        loc_variance,
+                                        outlier,
+                                        global_mean,
+                                        global_variance,
+                                        t_df
         );
-      
-      if(! fix_vec[jj]){
-        class_labels(jj) = select_class(curr_class_probs(jj, 0));
+        
+        // std::cout << curr_class_probs << "\n\n";
+        
+        if (i >= burn && (i - burn) % thinning == 0) {
+          // std::cout << "record accessed" << "\n";
+          record_ind = (i - burn) / thinning;
+          class_probs.slice(jj).row(record_ind) = arma::trans(curr_class_probs);
+          
+        }
+        if(! fix_vec[jj]){
+        class_labels(jj) = select_class(curr_class_probs);
         // std::cout << "New label\n" << class_labels(jj) << "\n";
       }
     }
@@ -529,10 +542,11 @@ Rcpp::List point_comparison(int num_iter,
     if (i >= burn && (i - burn) % thinning == 0) {
       // std::cout << i << "\n";
       // std::cout << (i - burn) / thinning << "\n";
+      // record_ind = (i - burn) / thinning;
       record_ind = (i - burn) / thinning;
       record.col(record_ind) = class_labels;
       // std::cout << "record accessed" << "\n";
-      class_probs(record_ind) = curr_class_probs;
+      // class_probs(record_ind) = curr_class_probs;
       
       for(int j = 0; j < k; j ++){
         // variance
@@ -540,7 +554,7 @@ Rcpp::List point_comparison(int num_iter,
         mu(record_ind, j) = loc_mu.slice(j);
         variance(record_ind, j) = loc_variance.slice(j);
       }
-      
+
     }
   }
   // std::cout << "Record\n" << record << "\n";
@@ -555,8 +569,27 @@ Rcpp::List point_comparison(int num_iter,
   // std::cout << "Y is here";
   // return sim;
   return List::create(Named("similarity") = sim,
+                      Named("class_record") = record,
                       Named("mean_posterior") = mu,
                       Named("variance_posterior") = variance,
                       Named("entropy") = entropy_cw,
                       Named("class_prob") = class_probs);
 }
+
+// 
+// // [[Rcpp::export]]
+// arma::cube re_order_list_dimensions(List orig_list,
+//                               int num_rows,
+//                               int num_cols){
+// 
+//   int n = orig_list.size();
+//   // List out_list(num_rows);
+//   arma::cube out_cube(n, num_cols, num_rows);
+//   for(int i = 0; i < num_rows; i++){
+//     for(int j = 0; j < n; j++){
+//       // want to combine not equate
+//       out_cube.slice(i).arma::insert_rows(orig_list(j));
+//     }
+//   }
+//   return out_cube
+// }
