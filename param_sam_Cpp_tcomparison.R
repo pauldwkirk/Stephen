@@ -409,6 +409,61 @@ gibbs_sampling <- function(data, k, class_labels, fix_vec,
   )
 }
 
+# --- Heatmap ------------------------------------------------------------------
+
+annotated_heatmap <- function(dissim, annotation_row, 
+                              train = NULL,
+                              # col_pal = RColorBrewer::brewer.pal(9, "Blues"),
+                              ...){
+
+  # Colour scheme for heatmap
+  col_pal <- RColorBrewer::brewer.pal(9, "Blues")
+  
+  feature_names <- names(annotation_row)
+  
+  # features_present <- list() # data.frame((matrix(ncol = length(feature_names), nrow = 0)))
+  # colnames(features_present) <- feature_names
+  
+  # Annotation colours
+  new_cols_list <- list()
+  my_colours <- list()
+  for (feature in feature_names){
+    # print(feature)
+    types_feature_present <- unique(annotation_row[[feature]][!is.na(annotation_row[[feature]])])
+    
+    # print(types_feature_present)
+    # features_present[[feature]] <- types_feature_present
+    new_cols_list[[feature]] <- colorRampPalette(grDevices::rainbow(length(types_feature_present)))
+    
+    my_colours[[feature]] <- new_cols_list[[feature]](length(types_feature_present))
+    names(my_colours[[feature]]) <- types_feature_present
+    # names(new_cols_list[[feature]]) <- types_feature_present
+    # my_colours[[feature]] <- new_cols_list[[feature]]
+    
+  }
+
+  # mycolors <- newCols(length(classes_present))
+  # names(mycolors) <- classes_present
+  # mycolors <- list(Class = mycolors, Predicted_class = mycolors)
+  
+  # Heatmap
+  if (is.null(train) | isTRUE(train)) {
+    heat_map <- pheatmap(dissim,
+                         annotation_row = annotation_row,
+                         annotation_colors = my_colours,
+                         # col_pal = col_pal,
+                         ...
+    )
+  } else {
+    heat_map <- pheatmap(dissim,
+                         # col_pal = col_pal,
+                         ...
+    )
+    
+  }
+  return(heat_map)
+}
+
 # === Wrapper ==================================================================
 
 mcmc_out <- function(MS_object,
@@ -613,6 +668,27 @@ mcmc_out <- function(MS_object,
   
   gibbs$predicted_class <- predicted_classes
   
+  # Example input for annotation_row in pheatmap
+  annotation_row <- class_labels %>% dplyr::select(Class)
+  annotation_row %<>%
+    mutate(Predicted_class = predicted_classes$Class)
+  
+  rownames(annotation_row) <- rownames(num_data)
+  
+  col_pal <- RColorBrewer::brewer.pal(9, "Blues")
+  
+  pauls_heatmap <- annotated_heatmap(num_data, annotation_row, 
+                                     train = train,
+                                     main = main,
+                                     cluster_row = FALSE,
+                                     cluster_cols = cluster_cols,
+                                     color = col_pal,
+                                     fontsize = fontsize,
+                                     fontsize_row = fontsize_row,
+                                     fontsize_col = fontsize_col,
+                                     gaps_col = gaps_col)
+  
+  
 
   if (heat_plot) {
 
@@ -625,43 +701,58 @@ mcmc_out <- function(MS_object,
 
     # Example input for annotation_row in pheatmap
     annotation_row <- class_labels %>% dplyr::select(Class)
+    # annotation_row %<>%
+    #   mutate(Predicted_class = predicted_classes$Class)
     rownames(annotation_row) <- rownames(dissim)
 
-    # Colour scheme for heatmap
     col_pal <- RColorBrewer::brewer.pal(9, "Blues")
-
-    # Annotation colours
-    newCols <- colorRampPalette(grDevices::rainbow(length(classes_present)))
-    mycolors <- newCols(length(classes_present))
-    names(mycolors) <- classes_present
-    mycolors <- list(Class = mycolors)
-
-    # Heatmap
-    if (is.null(train) | isTRUE(train)) {
-      heat_map <- pheatmap(dissim,
-        annotation_row = annotation_row,
-        annotation_colors = mycolors,
-        main = main,
-        cluster_row = cluster_row,
-        cluster_cols = cluster_cols,
-        color = col_pal,
-        fontsize = fontsize,
-        fontsize_row = fontsize_row,
-        fontsize_col = fontsize_col,
-        gaps_col = gaps_col
-      )
-    } else {
-      heat_map <- pheatmap(dissim,
-        main = main,
-        cluster_row = cluster_row,
-        cluster_cols = cluster_cols,
-        color = col_pal,
-        fontsize = fontsize,
-        fontsize_row = fontsize_row,
-        fontsize_col = fontsize_col,
-        gaps_col = gaps_col
-      )
-    }
+    
+    heat_map <- annotated_heatmap(dissim, annotation_row, 
+                                  train = train,
+                                  main = main,
+                                  cluster_row = cluster_row,
+                                  cluster_cols = cluster_cols,
+                                  color = col_pal,
+                                  fontsize = fontsize,
+                                  fontsize_row = fontsize_row,
+                                  fontsize_col = fontsize_col,
+                                  gaps_col = gaps_col)
+    
+    # # Colour scheme for heatmap
+    # col_pal <- RColorBrewer::brewer.pal(9, "Blues")
+    # 
+    # # Annotation colours
+    # newCols <- colorRampPalette(grDevices::rainbow(length(classes_present)))
+    # mycolors <- newCols(length(classes_present))
+    # names(mycolors) <- classes_present
+    # mycolors <- list(Class = mycolors, Predicted_class = mycolors)
+    # 
+    # # Heatmap
+    # if (is.null(train) | isTRUE(train)) {
+    #   heat_map <- pheatmap(dissim,
+    #     annotation_row = annotation_row,
+    #     annotation_colors = mycolors,
+    #     main = main,
+    #     cluster_row = cluster_row,
+    #     cluster_cols = cluster_cols,
+    #     color = col_pal,
+    #     fontsize = fontsize,
+    #     fontsize_row = fontsize_row,
+    #     fontsize_col = fontsize_col,
+    #     gaps_col = gaps_col
+    #   )
+    # } else {
+    #   heat_map <- pheatmap(dissim,
+    #     main = main,
+    #     cluster_row = cluster_row,
+    #     cluster_cols = cluster_cols,
+    #     color = col_pal,
+    #     fontsize = fontsize,
+    #     fontsize_row = fontsize_row,
+    #     fontsize_col = fontsize_col,
+    #     gaps_col = gaps_col
+    #   )
+    # }
   }
   if (entropy_plot) {
     entropy_data <- data.frame(Index = 1:num_iter, Entropy = gibbs$entropy)
@@ -726,8 +817,8 @@ stuff <- mcmc_out(HEK293T2011,
   burn = 10,
   thinning = 10,
   outlier = TRUE,
-  heat_plot = FALSE
-  # main = "Gene clustering by organelle"
+  heat_plot = FALSE,
+  main = "Gene clustering by organelle"
 )
 
 t2 <- Sys.time()
@@ -735,21 +826,21 @@ t2 <- Sys.time()
 t2 - t1 # how long does it take
 
 # To plot the entropy over iterations
-stuff$entropy_plot
-str(stuff$gibbs$class_prob)
-
-str(stuff$gibbs$class_record)
-
-stuff$gibbs$predicted_class
-
-y <- stuff$gibbs$class_record
-z <- with(stack(data.frame(t(y))), table(ind, values))
-predicted_classes <- data.frame(Class_key = as.numeric(colnames(z)[apply(z, 1, which.max)]),
-                                Count = apply(z, 1, max))
-
-predicted_classes$Class <- df2$B[match(df1$Class_key, df2$Class_key)]
-
-predicted_classes %<>%
-  dplyr::mutate(Class = 0)
-
-summary(stuff$gibbs$predicted_class)
+# stuff$entropy_plot
+# str(stuff$gibbs$class_prob)
+# 
+# str(stuff$gibbs$class_record)
+# 
+# stuff$gibbs$predicted_class
+# 
+# y <- stuff$gibbs$class_record
+# z <- with(stack(data.frame(t(y))), table(ind, values))
+# predicted_classes <- data.frame(Class_key = as.numeric(colnames(z)[apply(z, 1, which.max)]),
+#                                 Count = apply(z, 1, max))
+# 
+# predicted_classes$Class <- df2$B[match(df1$Class_key, df2$Class_key)]
+# 
+# predicted_classes %<>%
+#   dplyr::mutate(Class = 0)
+# 
+# summary(stuff$gibbs$predicted_class)
