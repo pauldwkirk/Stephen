@@ -435,7 +435,8 @@ mcmc_out <- function(MS_object,
                      mean_tolerance = 0.0005,
                      sd_tolerance = 0.0005,
                      outlier = FALSE,
-                     t_df = 4.0) {
+                     t_df = 4.0,
+                     prediction_threshold = 0.6) {
   # Returns mean, variance and similarity posteriors from Gibbs sampling with
   # option of pheatmap
 
@@ -578,6 +579,40 @@ mcmc_out <- function(MS_object,
   )
 
   print("Gibbs sampling complete")
+  
+  
+  # Create a dataframe for the predicted class
+  class_allocation_table <- with(
+    stack(data.frame(t(gibbs$class_record))),
+    table(ind, values)
+  )
+  
+  eff_iter <- ceiling((num_iter - burn) / thinning)
+  
+  # Create a column Class_key containing an integer in 1:k representing the most
+  # common class allocation, and a Count column with the proportion of times the 
+  # entry was allocated to said class
+  predicted_classes <- data.frame(
+    Class_key =
+      as.numeric(colnames(class_allocation_table)
+                 [apply(
+                   class_allocation_table,
+                   1,
+                   which.max
+                 )]),
+    Count = apply(class_allocation_table, 1, max) / eff_iter
+  )
+  
+  # Change the prediction to NA for any entry with a proportion below the input
+  # threshold
+  predicted_classes[predicted_classes$Count < prediction_threshold, ] = NA
+  
+  predicted_classes$Class <- class_labels_key$Class[match(
+    predicted_classes$Class_key,
+    class_labels_key$Class_key)]
+  
+  gibbs$predicted_class <- predicted_classes
+  
 
   if (heat_plot) {
 
@@ -673,6 +708,7 @@ mcmc_out <- function(MS_object,
       rec_burn = rec_burn
     ))
   }
+
   return(list(gibbs = gibbs))
 }
 
@@ -704,13 +740,16 @@ str(stuff$gibbs$class_prob)
 
 str(stuff$gibbs$class_record)
 
+stuff$gibbs$predicted_class
 
 y <- stuff$gibbs$class_record
+z <- with(stack(data.frame(t(y))), table(ind, values))
+predicted_classes <- data.frame(Class_key = as.numeric(colnames(z)[apply(z, 1, which.max)]),
+                                Count = apply(z, 1, max))
 
-hist(y[1000,])
+predicted_classes$Class <- df2$B[match(df1$Class_key, df2$Class_key)]
 
-z <- apply(y, 2, factor)
-qwert <- as.data.frame(z)
-summary(qwert)
+predicted_classes %<>%
+  dplyr::mutate(Class = 0)
 
-
+summary(stuff$gibbs$predicted_class)
