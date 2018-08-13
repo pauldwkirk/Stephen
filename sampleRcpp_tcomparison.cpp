@@ -343,9 +343,9 @@ arma::vec sample_class(arma::vec point,
       //   0.5 * log_det + d/2.0 * std::log(M_PI * t_df)) - (t_df + d/2.0) * 
       //   log(1 + (1/t_df) * exponent));
       
-      log_likelihood = (lgamma((t_df + d)/2.0) - lgamma(t_df/2.0) + d/2.0 * log(t_df)
-                        + d/2.0 * log(M_PI) + 0.5 * log_det - (t_df + d/2.0) *
-                        log(1 + (1/t_df) * exponent));
+      log_likelihood = (lgamma((t_df + d)/2.0) - lgamma(t_df/2.0)
+                          + d/2.0 * log(t_df * M_PI) + log_det - ((t_df + d)/2.0) *
+                            log(1 + (1/t_df) * exponent));
                         
     }
     else {
@@ -480,6 +480,7 @@ Rcpp::List point_comparison(int num_iter,
     class_weights = class_weight_posterior(concentration_0, class_labels, k);
     // std::cout << class_weights << "\n\n";
     // std::cout << "\nENTROPY";
+    // std::cout << class_weights << "\n\n";
     entropy_cw(i) = entropy(class_weights);
     for (int j = 1; j < k + 1; j++) {
       // std::cout << "\nj for loop";
@@ -498,7 +499,7 @@ Rcpp::List point_comparison(int num_iter,
       // std::cout << "\nVariance sampled\n";
       
       loc_mu.slice(j - 1) = mean_posterior(mu_0, loc_variance.slice(j - 1), lambda_0, cluster_data);
-      
+
       // std::cout << "\nAccessed cubes";
     }
     

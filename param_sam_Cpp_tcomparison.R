@@ -593,7 +593,7 @@ mcmc_out <- function(MS_object,
 
   not_fixed <- rep(FALSE, nrow(mydata_no_labels))
 
-  nk <- tabulate(fData(markerMSnSet(HEK293T2011))[, "markers"])
+  nk <- tabulate(fData(markerMSnSet(MS_object))[, "markers"])
 
   mydata_no_labels$markers <- NA
 
@@ -613,7 +613,7 @@ mcmc_out <- function(MS_object,
 
   class_labels <- data.frame(Class = mydata$markers)
 
-  classes_present <- unique(fData(markerMSnSet(HEK293T2011))[, "markers"])
+  classes_present <- unique(fData(markerMSnSet(MS_object))[, "markers"])
 
   rownames(class_labels) <- rownames(mydata)
 
@@ -639,20 +639,20 @@ mcmc_out <- function(MS_object,
   if (is.null(class_labels_0)) {
     class_weights <- nk / sum(nk)
     if (is.null(train)) {
-      fixed_labels <- as.numeric(fData(markerMSnSet(HEK293T2011))[, "markers"])
+      fixed_labels <- as.numeric(fData(markerMSnSet(MS_object))[, "markers"])
       class_labels_0 <- c(fixed_labels, sample(1:k, nrow(mydata_no_labels),
         replace = T,
         prob = class_weights
       ))
     } else if (isTRUE(train)) {
-      class_labels_0 <- as.numeric(fData(markerMSnSet(HEK293T2011))[, "markers"])
+      class_labels_0 <- as.numeric(fData(markerMSnSet(MS_object))[, "markers"])
     } else {
       class_labels_0 <- sample(1:k, N, replace = T, prob = class_weights)
     }
   }
 
   if (is.null(num_iter)) {
-    num_iter <- min((d^2) * 1000 / sqrt(N), 10000)
+    num_iter <- floor(min((d^2) * 1000 / sqrt(N), 10000))
   }
 
   if (is.null(burn)) {
@@ -878,13 +878,13 @@ set.seed(5)
 
 # MS object
 data("HEK293T2011") # Human Embroyonic Kidney dataset
-data("hyperLOPIT2015")
+data("hyperLOPIT2015") # Olly's normal data I think
 t1 <- Sys.time()
 
 stuff <- mcmc_out(hyperLOPIT2015,
-  num_iter = 1000,
-  burn = 100,
-  thinning = 25,
+  num_iter = 100,
+  burn = 10,
+  thinning = 10,
   outlier = TRUE,
   heat_plot = TRUE,
   main = "Gene clustering by organelle"
