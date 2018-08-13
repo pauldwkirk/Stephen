@@ -635,6 +635,11 @@ mcmc_out <- function(MS_object,
   class_labels %<>%
     mutate(Class_ind = as.numeric(mydata$markers))
 
+  if(outlier){
+    outlier_row <- data.frame(Class = c("Outlier"), Class_key = c(k + 1))
+    class_labels_key <- bind_rows(class_labels_key, outlier_row)
+  }
+  
   # Generate class labels
   if (is.null(class_labels_0)) {
     class_weights <- nk / sum(nk)
@@ -881,13 +886,14 @@ data("HEK293T2011") # Human Embroyonic Kidney dataset
 data("hyperLOPIT2015") # Olly's normal data I think
 t1 <- Sys.time()
 
-stuff <- mcmc_out(hyperLOPIT2015,
-  num_iter = 100,
-  burn = 10,
-  thinning = 10,
+stuff <- mcmc_out(HEK293T2011,
+  num_iter = 1000,
+  burn = 100,
+  thinning = 25,
   outlier = TRUE,
-  heat_plot = TRUE,
-  main = "Gene clustering by organelle"
+  heat_plot = FALSE,
+  main = "Gene clustering by organelle",
+  prediction_threshold = 0.5
 )
 
 t2 <- Sys.time()
