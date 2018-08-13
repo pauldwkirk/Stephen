@@ -43,6 +43,10 @@ library(magrittr)
 # to access C++ files
 library(Rcpp)
 
+# for better try_catch
+library(attempt)
+
+# for our homegrown C++ functions
 sourceCpp("sampleRcpp_tcomparison.cpp")
 
 # === Functions ================================================================
@@ -411,55 +415,106 @@ gibbs_sampling <- function(data, k, class_labels, fix_vec,
 
 # --- Heatmap ------------------------------------------------------------------
 
-annotated_heatmap <- function(dissim, annotation_row, 
+annotated_heatmap <- function(input_data, annotation_row,
+                              sort_by_col = NULL,
                               train = NULL,
                               # col_pal = RColorBrewer::brewer.pal(9, "Blues"),
-                              ...){
+                              ...) {
+  dissim <- input_data
+
+  sort_by_col <- attempt::try_catch(
+    expr = enquo(sort_by_col),
+    .e = NULL,
+    .w = NULL
+  )
+
+  # print(sort_by_col)
+
+  if (sort_by_col != quo(NULL)) {
+    # print("HIII")
+
+    # sort_col <- enquo(sort_by_col)
+
+    # col_of_interest <- annotation_row %>%
+    #   dplyr::select(!! sort_by_col)
+
+    combined_data <- bind_cols(dissim, annotation_row)
+
+    # print("Hail freedom")
+
+
+    sorted_data <- combined_data %>%
+      arrange(!!sort_by_col)
+
+    # print("HI")
+
+    dissim <- sorted_data %>%
+      dplyr::select(-one_of(names(annotation_row)))
+
+    annotation_row <- sorted_data %>%
+      dplyr::select(one_of(names(annotation_row)))
+
+    rownames(dissim) <- rownames(input_data)
+    rownames(annotation_row) <- rownames(input_data)
+
+    # rownames(sorted_data) <- rownames(dissim)
+
+    # dissim <- sorted_data
+  }
 
   # Colour scheme for heatmap
   col_pal <- RColorBrewer::brewer.pal(9, "Blues")
-  
+
   feature_names <- names(annotation_row)
-  
+
   # features_present <- list() # data.frame((matrix(ncol = length(feature_names), nrow = 0)))
   # colnames(features_present) <- feature_names
-  
+
   # Annotation colours
   new_cols_list <- list()
   my_colours <- list()
-  for (feature in feature_names){
+  for (feature in feature_names) {
     # print(feature)
     types_feature_present <- unique(annotation_row[[feature]][!is.na(annotation_row[[feature]])])
-    
+
     # print(types_feature_present)
+
     # features_present[[feature]] <- types_feature_present
     new_cols_list[[feature]] <- colorRampPalette(grDevices::rainbow(length(types_feature_present)))
-    
+
     my_colours[[feature]] <- new_cols_list[[feature]](length(types_feature_present))
     names(my_colours[[feature]]) <- types_feature_present
     # names(new_cols_list[[feature]]) <- types_feature_present
     # my_colours[[feature]] <- new_cols_list[[feature]]
-    
+
+    # print(my_colours[[feature]])
   }
+
+  # print(my_colours)
+  # print(unique(annotation_row))
+  # print(str(annotation_row))
+  # print(str(dissim))
+  # print(rownames(dissim)[1:10])
 
   # mycolors <- newCols(length(classes_present))
   # names(mycolors) <- classes_present
   # mycolors <- list(Class = mycolors, Predicted_class = mycolors)
-  
+
   # Heatmap
   if (is.null(train) | isTRUE(train)) {
+    # print("This is h")
     heat_map <- pheatmap(dissim,
-                         annotation_row = annotation_row,
-                         annotation_colors = my_colours,
-                         # col_pal = col_pal,
-                         ...
+      annotation_row = annotation_row,
+      annotation_colors = my_colours,
+      # col_pal = col_pal,
+      ...
     )
   } else {
-    heat_map <- pheatmap(dissim,
-                         # col_pal = col_pal,
-                         ...
+    heat_map <- pheatmap(
+      dissim,
+      # col_pal = col_pal,
+      ...
     )
-    
   }
   return(heat_map)
 }
@@ -543,12 +598,15 @@ mcmc_out <- function(MS_object,
   mydata_no_labels$markers <- NA
 
   if (is.null(train)) {
+    row_names <- c(rownames(mydata_labels), rownames(mydata_no_labels))
     mydata <- bind_rows(mydata_labels, mydata_no_labels)
     fix_vec <- c(fixed, not_fixed)
   } else if (isTRUE(train)) {
+    row_names <- c(rownames(mydata_labels))
     mydata <- mydata_labels
     fix_vec <- fixed
   } else {
+    row_names <- c(rownames(mydata_no_labels))
     mydata <- mydata_no_labels
     fix_vec <- not_fixed
   }
@@ -634,61 +692,66 @@ mcmc_out <- function(MS_object,
   )
 
   print("Gibbs sampling complete")
-  
-  
+
+
   # Create a dataframe for the predicted class
   class_allocation_table <- with(
     stack(data.frame(t(gibbs$class_record))),
     table(ind, values)
   )
-  
+
   eff_iter <- ceiling((num_iter - burn) / thinning)
-  
+
   # Create a column Class_key containing an integer in 1:k representing the most
-  # common class allocation, and a Count column with the proportion of times the 
+  # common class allocation, and a Count column with the proportion of times the
   # entry was allocated to said class
   predicted_classes <- data.frame(
     Class_key =
       as.numeric(colnames(class_allocation_table)
-                 [apply(
-                   class_allocation_table,
-                   1,
-                   which.max
-                 )]),
+      [apply(
+          class_allocation_table,
+          1,
+          which.max
+        )]),
     Count = apply(class_allocation_table, 1, max) / eff_iter
   )
-  
+
   # Change the prediction to NA for any entry with a proportion below the input
   # threshold
-  predicted_classes[predicted_classes$Count < prediction_threshold, ] = NA
-  
+  predicted_classes[predicted_classes$Count < prediction_threshold, ] <- NA
+
   predicted_classes$Class <- class_labels_key$Class[match(
     predicted_classes$Class_key,
-    class_labels_key$Class_key)]
-  
+    class_labels_key$Class_key
+  )]
+
   gibbs$predicted_class <- predicted_classes
-  
+
   # Example input for annotation_row in pheatmap
   annotation_row <- class_labels %>% dplyr::select(Class)
   annotation_row %<>%
     mutate(Predicted_class = predicted_classes$Class)
-  
+
+  rownames(num_data) <- row_names
+  # print(rownames(mydata[1:10,]))
+
   rownames(annotation_row) <- rownames(num_data)
-  
+
   col_pal <- RColorBrewer::brewer.pal(9, "Blues")
-  
-  pauls_heatmap <- annotated_heatmap(num_data, annotation_row, 
-                                     train = train,
-                                     main = main,
-                                     cluster_row = FALSE,
-                                     cluster_cols = cluster_cols,
-                                     color = col_pal,
-                                     fontsize = fontsize,
-                                     fontsize_row = fontsize_row,
-                                     fontsize_col = fontsize_col,
-                                     gaps_col = gaps_col)
-  
-  
+
+  pauls_heatmap <- annotated_heatmap(num_data, annotation_row,
+    sort_by_col = Predicted_class,
+    train = train,
+    main = "Paul's sense check heatmap",
+    cluster_row = FALSE,
+    cluster_cols = FALSE,
+    color = col_pal,
+    fontsize = fontsize,
+    fontsize_row = fontsize_row,
+    fontsize_col = fontsize_col
+  )
+
+  # return(pauls_heatmap)
 
   if (heat_plot) {
 
@@ -699,34 +762,40 @@ mcmc_out <- function(MS_object,
     colnames(dissim) <- rownames(num_data)
     rownames(dissim) <- rownames(num_data)
 
+    # print("Printing rownames for orig heatmpat")
+    # print(rownames(dissim[1:10]))
+    # print(num_data)
+    # print(rownames(num_data[1:5, ]))
+
     # Example input for annotation_row in pheatmap
-    annotation_row <- class_labels %>% dplyr::select(Class)
+    # annotation_row <- class_labels %>% dplyr::select(Class)
     # annotation_row %<>%
     #   mutate(Predicted_class = predicted_classes$Class)
-    rownames(annotation_row) <- rownames(dissim)
+    # rownames(annotation_row) <- rownames(dissim)
 
     col_pal <- RColorBrewer::brewer.pal(9, "Blues")
-    
-    heat_map <- annotated_heatmap(dissim, annotation_row, 
-                                  train = train,
-                                  main = main,
-                                  cluster_row = cluster_row,
-                                  cluster_cols = cluster_cols,
-                                  color = col_pal,
-                                  fontsize = fontsize,
-                                  fontsize_row = fontsize_row,
-                                  fontsize_col = fontsize_col,
-                                  gaps_col = gaps_col)
-    
+
+    heat_map <- annotated_heatmap(dissim, annotation_row,
+      train = train,
+      main = main,
+      cluster_row = cluster_row,
+      cluster_cols = cluster_cols,
+      color = col_pal,
+      fontsize = fontsize,
+      fontsize_row = fontsize_row,
+      fontsize_col = fontsize_col,
+      gaps_col = gaps_col
+    )
+
     # # Colour scheme for heatmap
     # col_pal <- RColorBrewer::brewer.pal(9, "Blues")
-    # 
+    #
     # # Annotation colours
     # newCols <- colorRampPalette(grDevices::rainbow(length(classes_present)))
     # mycolors <- newCols(length(classes_present))
     # names(mycolors) <- classes_present
     # mycolors <- list(Class = mycolors, Predicted_class = mycolors)
-    # 
+    #
     # # Heatmap
     # if (is.null(train) | isTRUE(train)) {
     #   heat_map <- pheatmap(dissim,
@@ -809,15 +878,15 @@ set.seed(5)
 
 # MS object
 data("HEK293T2011") # Human Embroyonic Kidney dataset
-
+data("hyperLOPIT2015")
 t1 <- Sys.time()
 
-stuff <- mcmc_out(HEK293T2011,
-  num_iter = 100,
-  burn = 10,
-  thinning = 10,
+stuff <- mcmc_out(hyperLOPIT2015,
+  num_iter = 1000,
+  burn = 100,
+  thinning = 25,
   outlier = TRUE,
-  heat_plot = FALSE,
+  heat_plot = TRUE,
   main = "Gene clustering by organelle"
 )
 
@@ -828,19 +897,19 @@ t2 - t1 # how long does it take
 # To plot the entropy over iterations
 # stuff$entropy_plot
 # str(stuff$gibbs$class_prob)
-# 
+#
 # str(stuff$gibbs$class_record)
-# 
+#
 # stuff$gibbs$predicted_class
-# 
+#
 # y <- stuff$gibbs$class_record
 # z <- with(stack(data.frame(t(y))), table(ind, values))
 # predicted_classes <- data.frame(Class_key = as.numeric(colnames(z)[apply(z, 1, which.max)]),
 #                                 Count = apply(z, 1, max))
-# 
+#
 # predicted_classes$Class <- df2$B[match(df1$Class_key, df2$Class_key)]
-# 
+#
 # predicted_classes %<>%
 #   dplyr::mutate(Class = 0)
-# 
+#
 # summary(stuff$gibbs$predicted_class)
