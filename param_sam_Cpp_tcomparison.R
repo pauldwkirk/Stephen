@@ -769,9 +769,9 @@ mcmc_out <- function(MS_object,
   # return(pauls_heatmap)
 
   all_data <- dplyr::bind_cols(num_data, dplyr::select(gibbs$predicted_class, Class))
-  rownames(all_data) <- rownames(num_data)
-  
-  return(all_data)
+  all_data$Fixed <- fix_vec
+  all_data$Protein <- rownames(num_data)
+  # rownames(all_data) <- rownames(num_data)
   
   if (heat_plot) {
 
@@ -826,24 +826,27 @@ mcmc_out <- function(MS_object,
       gibbs = gibbs,
       heat_map = heat_map,
       entropy_plot = entropy_scatter,
-      rec_burn = rec_burn
+      rec_burn = rec_burn,
+      data = all_data
     ))
   }
   if (heat_plot) {
     return(list(
       gibbs = gibbs,
-      heatmap = heat_map
+      heatmap = heat_map,
+      data = all_data
     ))
   }
   if (entropy_plot) {
     return(list(
       gibbs = gibbs,
       entropy_plot = entropy_scatter,
-      rec_burn = rec_burn
+      rec_burn = rec_burn,
+      data = all_data
     ))
   }
 
-  return(list(gibbs = gibbs))
+  return(list(gibbs = gibbs, data = all_data))
 }
 
 # === Olly =====================================================================
@@ -889,64 +892,21 @@ t2 - t1 # how long does it take
 #
 # summary(stuff$gibbs$predicted_class)
 
-plot_data <- stuff$gibbs$predicted_class
 
-ggplot(data = stuff) +
-  geom_line()
-  
-
-indixes <- sample(1:1371, 20,  replace = F)
-
-plot_data <- stuff[indixes, c(1:5, 9)]
-x <- plot_data[, 1:5]
-matplot(t(x),
-        xlab = "MS", ylab = "Density fraction",
-        xaxt = "n",
-        axes = FALSE, # Don't plot the axes
-        frame.plot = FALSE, # Remove the frame
-        panel.first = abline(h = seq(-1.5, 1.5, 0.05), col = "grey80"),
-        font = 2,
-        family = "serif",
-        pch = 16 #,
-        # col = "red"
-)
-matlines(t(x))
-axis(1,
-     at = 1:5,
-     labels = colnames(x),
-     lty = 2,
-     col = "grey80",
-     family = "serif",
-     font = 0.8
-)
-
-axis(2, lty = 2, col = "grey80", family = "serif", font = 0.8)
-title("First matplot",
-      adj = 1,
-      cex.main = 1.5,
-      font.main = 2,
-      col.main = "black",
-      family = "serif"
-)
-
-y <- t(plot_data[, 1:5])
-
-
-
-
-plot_data$Protein <- rownames(plot_data)
-
-autoplot(zoo(y), facet = NULL) + geom_point()
-stuff$Protein <- rownames(stuff)
-z <- melt(stuff)
+# stuff$Protein <- rownames(stuff)
+z <- melt(stuff$data, id.vars = c("Protein", "Class", "Fixed"))
+# z$Fixed <- as.numeric(z$Fixed)
 
 curr_data <- z %>%
   filter(Class %in% c("Cytosol", "PM"))
+
+curr_data %<>% group_by(Protein)
 
 ggplot(data = curr_data,
        aes(x = variable, y = value, colour = Class, group = Protein)
        ) +
   geom_point() +
-  geom_line()
-
-# ggplot(zoo(y),aes(x = Time, y = Value, group = Series))
+  geom_line(aes(linetype = Fixed)) +
+  # gghighlight(! Fixed, use_direct_label = FALSE) +
+  NULL
+  
