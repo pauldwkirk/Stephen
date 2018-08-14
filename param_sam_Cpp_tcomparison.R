@@ -46,6 +46,9 @@ library(Rcpp)
 # for better try_catch
 library(attempt)
 
+# to melt and reshape data
+library(reshape)
+
 # for our homegrown C++ functions
 sourceCpp("sampleRcpp_tcomparison.cpp")
 
@@ -435,17 +438,22 @@ annotated_heatmap <- function(input_data, annotation_row,
 
     # sort_col <- enquo(sort_by_col)
 
-    # col_of_interest <- annotation_row %>%
-    #   dplyr::select(!! sort_by_col)
+    col_of_interest <- annotation_row %>%
+      dplyr::select(!! sort_by_col)
 
     combined_data <- bind_cols(dissim, annotation_row)
 
     # print("Hail freedom")
 
-
-    sorted_data <- combined_data %>%
-      arrange(!!sort_by_col)
-
+    # if ("Outlier" %in% col_of_interest[, ]){
+    # sorted_data <- combined_data %>%
+    #   filter(Predicted_class != "Outlier") %>%
+    #   arrange(!!sort_by_col) %>%
+    #   bind_rows(., filter(combined_data, Predicted_class != "Outlier"))
+    # } else {
+      sorted_data <- combined_data %>%
+        arrange(!!sort_by_col)
+    # }
     # print("HI")
 
     dissim <- sorted_data %>%
@@ -474,45 +482,47 @@ annotated_heatmap <- function(input_data, annotation_row,
   new_cols_list <- list()
   my_colours <- list()
   for (feature in feature_names) {
+    
+    outlier_present <- FALSE
+    
     # print(feature)
     types_feature_present <- unique(annotation_row[[feature]][!is.na(annotation_row[[feature]])])
 
     # print(types_feature_present)
 
+    if(feature == "Predicted_class"){
+      if("Outlier" %in% types_feature_present){
+        outlier_present <- TRUE
+        types_feature_present <- types_feature_present[types_feature_present != "Outlier"]
+      } 
+    }
+    
     # features_present[[feature]] <- types_feature_present
     new_cols_list[[feature]] <- colorRampPalette(grDevices::rainbow(length(types_feature_present)))
 
+
+    
     my_colours[[feature]] <- new_cols_list[[feature]](length(types_feature_present))
+    
+    if(outlier_present){
+      my_colours[[feature]] <- c(my_colours[[feature]], "black")
+      types_feature_present <- c(types_feature_present, "Outlier")
+    }
+    
     names(my_colours[[feature]]) <- types_feature_present
-    # names(new_cols_list[[feature]]) <- types_feature_present
-    # my_colours[[feature]] <- new_cols_list[[feature]]
 
-    # print(my_colours[[feature]])
   }
-
-  # print(my_colours)
-  # print(unique(annotation_row))
-  # print(str(annotation_row))
-  # print(str(dissim))
-  # print(rownames(dissim)[1:10])
-
-  # mycolors <- newCols(length(classes_present))
-  # names(mycolors) <- classes_present
-  # mycolors <- list(Class = mycolors, Predicted_class = mycolors)
 
   # Heatmap
   if (is.null(train) | isTRUE(train)) {
-    # print("This is h")
     heat_map <- pheatmap(dissim,
       annotation_row = annotation_row,
       annotation_colors = my_colours,
-      # col_pal = col_pal,
       ...
     )
   } else {
     heat_map <- pheatmap(
       dissim,
-      # col_pal = col_pal,
       ...
     )
   }
@@ -758,6 +768,11 @@ mcmc_out <- function(MS_object,
 
   # return(pauls_heatmap)
 
+  all_data <- dplyr::bind_cols(num_data, dplyr::select(gibbs$predicted_class, Class))
+  rownames(all_data) <- rownames(num_data)
+  
+  return(all_data)
+  
   if (heat_plot) {
 
     # dissimilarity matrix
@@ -766,17 +781,6 @@ mcmc_out <- function(MS_object,
     # Require names to associate data in annotation columns with original data
     colnames(dissim) <- rownames(num_data)
     rownames(dissim) <- rownames(num_data)
-
-    # print("Printing rownames for orig heatmpat")
-    # print(rownames(dissim[1:10]))
-    # print(num_data)
-    # print(rownames(num_data[1:5, ]))
-
-    # Example input for annotation_row in pheatmap
-    # annotation_row <- class_labels %>% dplyr::select(Class)
-    # annotation_row %<>%
-    #   mutate(Predicted_class = predicted_classes$Class)
-    # rownames(annotation_row) <- rownames(dissim)
 
     col_pal <- RColorBrewer::brewer.pal(9, "Blues")
 
@@ -792,41 +796,6 @@ mcmc_out <- function(MS_object,
       gaps_col = gaps_col
     )
 
-    # # Colour scheme for heatmap
-    # col_pal <- RColorBrewer::brewer.pal(9, "Blues")
-    #
-    # # Annotation colours
-    # newCols <- colorRampPalette(grDevices::rainbow(length(classes_present)))
-    # mycolors <- newCols(length(classes_present))
-    # names(mycolors) <- classes_present
-    # mycolors <- list(Class = mycolors, Predicted_class = mycolors)
-    #
-    # # Heatmap
-    # if (is.null(train) | isTRUE(train)) {
-    #   heat_map <- pheatmap(dissim,
-    #     annotation_row = annotation_row,
-    #     annotation_colors = mycolors,
-    #     main = main,
-    #     cluster_row = cluster_row,
-    #     cluster_cols = cluster_cols,
-    #     color = col_pal,
-    #     fontsize = fontsize,
-    #     fontsize_row = fontsize_row,
-    #     fontsize_col = fontsize_col,
-    #     gaps_col = gaps_col
-    #   )
-    # } else {
-    #   heat_map <- pheatmap(dissim,
-    #     main = main,
-    #     cluster_row = cluster_row,
-    #     cluster_cols = cluster_cols,
-    #     color = col_pal,
-    #     fontsize = fontsize,
-    #     fontsize_row = fontsize_row,
-    #     fontsize_col = fontsize_col,
-    #     gaps_col = gaps_col
-    #   )
-    # }
   }
   if (entropy_plot) {
     entropy_data <- data.frame(Index = 1:num_iter, Entropy = gibbs$entropy)
@@ -887,13 +856,13 @@ data("hyperLOPIT2015") # Olly's normal data I think
 t1 <- Sys.time()
 
 stuff <- mcmc_out(HEK293T2011,
-  num_iter = 1000,
-  burn = 100,
-  thinning = 25,
+  num_iter = 100,
+  burn = 10,
+  thinning = 5,
   outlier = TRUE,
   heat_plot = FALSE,
   main = "Gene clustering by organelle",
-  prediction_threshold = 0.5
+  prediction_threshold = 0.6
 )
 
 t2 <- Sys.time()
@@ -919,3 +888,65 @@ t2 - t1 # how long does it take
 #   dplyr::mutate(Class = 0)
 #
 # summary(stuff$gibbs$predicted_class)
+
+plot_data <- stuff$gibbs$predicted_class
+
+ggplot(data = stuff) +
+  geom_line()
+  
+
+indixes <- sample(1:1371, 20,  replace = F)
+
+plot_data <- stuff[indixes, c(1:5, 9)]
+x <- plot_data[, 1:5]
+matplot(t(x),
+        xlab = "MS", ylab = "Density fraction",
+        xaxt = "n",
+        axes = FALSE, # Don't plot the axes
+        frame.plot = FALSE, # Remove the frame
+        panel.first = abline(h = seq(-1.5, 1.5, 0.05), col = "grey80"),
+        font = 2,
+        family = "serif",
+        pch = 16 #,
+        # col = "red"
+)
+matlines(t(x))
+axis(1,
+     at = 1:5,
+     labels = colnames(x),
+     lty = 2,
+     col = "grey80",
+     family = "serif",
+     font = 0.8
+)
+
+axis(2, lty = 2, col = "grey80", family = "serif", font = 0.8)
+title("First matplot",
+      adj = 1,
+      cex.main = 1.5,
+      font.main = 2,
+      col.main = "black",
+      family = "serif"
+)
+
+y <- t(plot_data[, 1:5])
+
+
+
+
+plot_data$Protein <- rownames(plot_data)
+
+autoplot(zoo(y), facet = NULL) + geom_point()
+stuff$Protein <- rownames(stuff)
+z <- melt(stuff)
+
+curr_data <- z %>%
+  filter(Class %in% c("Cytosol", "PM"))
+
+ggplot(data = curr_data,
+       aes(x = variable, y = value, colour = Class, group = Protein)
+       ) +
+  geom_point() +
+  geom_line()
+
+# ggplot(zoo(y),aes(x = Time, y = Value, group = Series))
