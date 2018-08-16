@@ -21,7 +21,7 @@ double point_similarity(int point,
   return out;
 }
 
-
+// [[Rcpp::export]]
 arma::mat similarity_mat(arma::Mat<int> cluster_record){
   int sample_size = cluster_record.n_rows;
   int num_iter = cluster_record.n_cols;
@@ -147,16 +147,31 @@ arma::field<arma::mat> sample_class_probabilities(arma::field<arma::mat> class_p
 }
 
 // Sample the cluster membership of point
-arma::vec cluster_probabilities(arma::vec point,
+arma::vec cluster_probabilities(arma::rowvec point,
                                 arma::mat data,
                                 arma::field<arma::mat> class_probabilities,
                                 arma::uword num_clusters,
                                 arma::uword num_cols){
+  
+  // std::cout << "In function cluster_probabilities\n";
   arma::vec probabilities = arma::zeros<arma::vec>(num_clusters);
 
+  // std::cout << "\n\n" << class_probabilities << "\n\n";
+  
   for(arma::uword i = 0; i < num_clusters; i++){
     for(arma::uword j = 0; j < num_cols; j++){
-      probabilities(i) = probabilities(i) + std::log(class_probabilities(j)(point(j), i));
+      // std::cout << "Adding to probability score thing\n";
+      // std::cout << probabilities(i) << "\n";
+      // std::cout << point(j) << "\n";
+      // 
+      // std::cout << "Phi field entry " << j << point(j) << i << "\n";
+      // std::cout << class_probabilities(j) << "\n";
+      // 
+      // std::cout << class_probabilities(j)(i, point(j)) << "\n";
+      // 
+      // std::cout << "iteration " << i << "\n";
+      
+      probabilities(i) = probabilities(i) + std::log(class_probabilities(j)(i, point(j)));
     }
     
   }
@@ -194,9 +209,14 @@ arma::mat sampling(arma::mat data,
   cat_count = cat_counter(data);
   
   arma::field<arma::mat> class_probabilities(num_cols);
+  
+  // std::cout << "Declaring field of matrices for class probs\n";
+  
   class_probabilities = declare_class_probs_field(cat_count,
                             num_cols,
                             num_clusters);
+  
+  // std::cout << "Class probabilities declared\n";
   
   arma::vec cluster_weights(num_clusters);
   
@@ -206,10 +226,15 @@ arma::mat sampling(arma::mat data,
   arma::Mat<int> record(n, eff_count);
   record.zeros();
   
+  // std::cout << "Reached for loop\n";
+  
   for(arma::uword i = 0; i < num_iter; i++){
+    
     cluster_weights = cluster_weight_posterior(cluster_weight_priors,
                                                cluster_labels,
                                                num_clusters);
+    
+    // std::cout << "Cluster weights calculated\n";
     
     class_probabilities = sample_class_probabilities(class_probabilities,
                                                      phi_prior,
@@ -220,6 +245,8 @@ arma::mat sampling(arma::mat data,
                                  
     );
     
+    // std::cout << "Class probs calculated\n";
+    
     for(arma::uword j = 0; j < n; j++){
       // sample cluster for each point here
       curr_class_probs = cluster_probabilities(data.row(j),
@@ -227,6 +254,9 @@ arma::mat sampling(arma::mat data,
                                                class_probabilities,
                                                num_clusters,
                                                num_cols);
+      
+      // std::cout << "Cluster sampled\n";
+      
       if(! fix_vec(j)){
         cluster_labels(j) = cluster_predictor(curr_class_probs);
       }
