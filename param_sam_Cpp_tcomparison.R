@@ -328,7 +328,8 @@ gibbs_sampling <- function(data, k, class_labels, fix_vec,
                            concentration_0 = 0.1,
                            thinning = 25,
                            outlier = FALSE,
-                           t_df = 4.0) {
+                           t_df = 4.0,
+                           record_posteriors = FALSE) {
   # Carries out gibbs sampling of data and returns a similarity matrix for points
 
   # data: data being analysed
@@ -412,7 +413,8 @@ gibbs_sampling <- function(data, k, class_labels, fix_vec,
     burn,
     thinning,
     outlier,
-    t_df
+    t_df,
+    record_posteriors
   )
 }
 
@@ -556,7 +558,8 @@ mcmc_out <- function(MS_object,
                      sd_tolerance = 0.0005,
                      outlier = FALSE,
                      t_df = 4.0,
-                     prediction_threshold = 0.6) {
+                     prediction_threshold = 0.6,
+                     record_posteriors = FALSE) {
   # Returns mean, variance and similarity posteriors from Gibbs sampling with
   # option of pheatmap
 
@@ -609,7 +612,7 @@ mcmc_out <- function(MS_object,
 
   if (is.null(train)) {
     row_names <- c(rownames(mydata_labels), rownames(mydata_no_labels))
-    mydata <- bind_rows(mydata_labels, mydata_no_labels)
+    mydata <- suppressWarnings(bind_rows(mydata_labels, mydata_no_labels))
     fix_vec <- c(fixed, not_fixed)
   } else if (isTRUE(train)) {
     row_names <- c(rownames(mydata_labels))
@@ -647,7 +650,7 @@ mcmc_out <- function(MS_object,
 
   if(outlier){
     outlier_row <- data.frame(Class = c("Outlier"), Class_key = c(k + 1))
-    class_labels_key <- bind_rows(class_labels_key, outlier_row)
+    class_labels_key <- suppressWarnings(bind_rows(class_labels_key, outlier_row))
   }
   
   # Generate class labels
@@ -703,7 +706,8 @@ mcmc_out <- function(MS_object,
     concentration_0 = concentration_0,
     thinning = thinning,
     outlier = outlier,
-    t_df = t_df
+    t_df = t_df,
+    record_posteriors = record_posteriors
   )
 
   print("Gibbs sampling complete")
@@ -859,13 +863,13 @@ data("hyperLOPIT2015") # Olly's normal data I think
 t1 <- Sys.time()
 
 stuff <- mcmc_out(HEK293T2011,
-  num_iter = 100,
-  burn = 10,
-  thinning = 5,
+  num_iter = 10000,
+  burn = 1000,
+  thinning = 50,
   outlier = TRUE,
-  heat_plot = FALSE,
+  heat_plot = TRUE,
   main = "Gene clustering by organelle",
-  prediction_threshold = 0.6
+  prediction_threshold = 0.5
 )
 
 t2 <- Sys.time()
